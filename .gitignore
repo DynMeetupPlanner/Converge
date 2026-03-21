@@ -2,12 +2,15 @@
 
 # dependencies
 frontend/node_modules/
+backend/node_modules/
 
 # Expo
 frontend/.expo/
 frontend/dist/
 frontend/web-build/
 frontend/expo-env.d.ts
+
+
 
 # Native
 frontend/.kotlin/
