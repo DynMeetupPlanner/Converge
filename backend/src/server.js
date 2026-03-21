@@ -5,7 +5,7 @@ import dotenv from "dotenv";
 
 dotenv.config()
 
-const PORT = process.env.PORT || 3000
+const PORT = process.env.PORT || 8080;
 const app = express()
 app.use(express.json())
 
@@ -20,6 +20,6 @@ app.get('/',(req,res)=>{
 });
 
 
-app.listen(PORT,()=>{
+app.listen(PORT,'0.0.0.0',()=>{
     console.log("Server has started and listening on port: ",PORT)
 })
