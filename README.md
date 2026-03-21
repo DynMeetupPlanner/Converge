@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # InBetween App Setup Guide
 
 ## 📦 Prerequisites
@@ -132,3 +133,6 @@ npx expo start
 - Never use `localhost` for mobile testing
 - Always use your system’s IP address
 - Keep backend running while testing frontend
+=======
+# sturdy-goggles
+>>>>>>> 3b95bfd (first commit added)
