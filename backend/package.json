@@ -12,10 +12,13 @@
   "license": "ISC",
   "type": "module",
   "dependencies": {
-    "bcrypt": "^6.0.0",
+    "bcryptjs": "^3.0.3",
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
-    "mongoose": "^9.3.1",
+    "mongoose": "^9.3.1"
+ 
+  },
+  "engines": {
     "node": "^25.8.1"
   },
   "devDependencies": {
