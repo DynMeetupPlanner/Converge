@@ -4,6 +4,7 @@ import { Colors } from '@/constants/theme';
 import { router } from 'expo-router';
 import { AuthStyle } from '../styles/AuthStyle';
 import { useState } from 'react';
+import { API_URL } from '@/lib/api';
 
 
 export default function HomeScreen() {
@@ -25,7 +26,7 @@ export default function HomeScreen() {
     }
     try {
       const dob = new Date(`${year}-${month}-${day}`);
-      const res = await fetch('https://sturdy-goggles-1033249426470.asia-south1.run.app/Auth/register', {
+      const res = await fetch(`${API_URL}/Auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, username, email, password, dateOfBirth: dob }),

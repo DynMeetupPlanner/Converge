@@ -1,6 +1,6 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
-import { AuthProvider, useAuth } from '@/components/AuthContext.js';
+import { AuthProvider, useAuth } from '@/components/AuthContext';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { ActivityIndicator, View } from 'react-native';
 import { Colors } from '@/constants/theme';

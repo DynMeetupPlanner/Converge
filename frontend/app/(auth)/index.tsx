@@ -4,7 +4,8 @@ import { Colors } from '@/constants/theme';
 import { router } from 'expo-router';
 import { AuthStyle } from '../styles/AuthStyle';
 import { useState } from 'react';
-import { useAuth } from '@/components/AuthContext.js';
+import { useAuth } from '@/components/AuthContext';
+import { API_URL } from '@/lib/api';
 
 
 
@@ -16,7 +17,7 @@ export default function HomeScreen() {
   const [error, setError] = useState('');
   const { login ,token} = useAuth();
 
-const handleLogin = async () => {
+  const handleLogin = async () => {
   if (!email || !password) {
     setError("All fields required");
     return;
@@ -24,7 +25,7 @@ const handleLogin = async () => {
 
   
   try {
-    const res = await fetch('https://sturdy-goggles-1033249426470.asia-south1.run.app/Auth/login', {
+    const res = await fetch(`${API_URL}/Auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }),

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Colors } from '@/constants/theme';
 import SettingsStyle from '../styles/SettingsStyle';
-import { useAuth } from '@/components/AuthContext.js';
+import { useAuth } from '@/components/AuthContext';
 
 type DefaultCategory = 'all' | 'cafe' | 'restaurant' | 'park';
 
