@@ -32,7 +32,6 @@ export default function HomeScreen() {
     });
 
     const data = await res.json();
-
     if (!res.ok) {
       setError(data.msg || "Login failed");
       return;
