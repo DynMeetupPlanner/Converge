@@ -2,6 +2,8 @@ import express from "express";
 import AuthRoutes from "./routes/AuthRoutes.js";
 import { connectDB } from "./config/db.js";
 import dotenv from "dotenv";
+import PlaceRoutes from './routes/PlaceRoutes.js';
+import OsmRoutes from "./routes/OsmRoutes.js";
 
 dotenv.config()
 
@@ -11,8 +13,9 @@ app.use(express.json())
 
 connectDB();
 
-app.use('/Auth',AuthRoutes)
-
+app.use('/Auth', AuthRoutes)
+app.use('/places', PlaceRoutes);
+app.use("/osm", OsmRoutes);
 
 app.get('/',(req,res)=>{
     res.send("this is a testr ")

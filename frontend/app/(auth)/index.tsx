@@ -93,7 +93,7 @@ const handleLogin = async () => {
       </TouchableOpacity>
 
       <Text style={styles.footer}>
-        Don't have an account?{' '}
+        Dont have an account?{' '}
         <Text
           style={styles.link}
           onPress={() => router.replace('/register')}
