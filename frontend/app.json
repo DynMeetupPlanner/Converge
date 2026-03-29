@@ -42,6 +42,12 @@
           }
         }
       ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow Converge to use your location to find midpoints."
+        }
+      ],
       "expo-web-browser"
     ],
     "experiments": {
