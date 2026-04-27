@@ -46,6 +46,12 @@ const userSchema = new mongoose.Schema({
       },
     },
 
+    gender: {
+      type: String,
+      enum: ["male", "female", "other"],
+      required: true,
+    },
+
     authProvider: {
       type: String,
       enum: ["local", "google"],
@@ -69,6 +75,13 @@ const userSchema = new mongoose.Schema({
     },
 
     lastLogin: {
+      type: Date,
+    },
+
+    resetPasswordOTP: {
+      type: String,
+    },
+    resetPasswordExpires: {
       type: Date,
     },
 },{

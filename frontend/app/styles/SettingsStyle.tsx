@@ -1,45 +1,49 @@
-import { StyleSheet } from 'react-native';
+import { StyleSheet, Platform } from 'react-native';
 import { Colors, Fonts } from '@/constants/theme';
 
 export const SettingsStyle = (theme: 'light' | 'dark') =>
   StyleSheet.create({
     container: {
-      backgroundColor: Colors[theme].background,
       flex: 1,
     },
 
     contentContainer: {
-      paddingHorizontal: 20,
-      paddingTop: 52,
-      paddingBottom: 32,
+      paddingHorizontal: 24,
+      paddingTop: 60,
+      paddingBottom: 40,
+    },
+
+    glassCard: {
+      backgroundColor: Colors[theme].card,
+      borderRadius: 16,
+      padding: 16,
+      marginBottom: 16,
+      borderWidth: 1,
+      borderColor: Colors[theme].border,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 3,
     },
 
     eyebrow: {
       color: Colors[theme].muted,
-      fontFamily: Fonts.rounded,
-      fontSize: 12,
-      letterSpacing: 1.4,
-      textTransform: 'uppercase',
-      fontWeight: '700',
-      marginBottom: 8,
+      fontSize: 14,
+      fontWeight: '600',
     },
 
     title: {
+      fontSize: 28,
+      fontWeight: '700',
+      marginBottom: 8,
       color: Colors[theme].text,
-      fontFamily: Fonts.rounded,
-      fontSize: 34,
-      lineHeight: 38,
-      fontWeight: '800',
-      letterSpacing: -0.8,
-      marginBottom: 10,
     },
 
     subtitle: {
       color: Colors[theme].muted,
-      fontFamily: Fonts.sans,
       fontSize: 15,
-      lineHeight: 22,
-      marginBottom: 18,
+      marginBottom: 20,
     },
 
     sectionCard: {
@@ -54,10 +58,8 @@ export const SettingsStyle = (theme: 'light' | 'dark') =>
     sectionTitle: {
       color: Colors[theme].text,
       fontSize: 18,
-      fontWeight: '800',
-      fontFamily: Fonts.rounded,
-      letterSpacing: -0.2,
-      marginBottom: 10,
+      fontWeight: '700',
+      marginBottom: 4,
     },
 
     accountRow: {
@@ -75,26 +77,20 @@ export const SettingsStyle = (theme: 'light' | 'dark') =>
       justifyContent: 'center',
     },
 
-    accountTextWrap: {
-      flex: 1,
-    },
-
     accountName: {
       color: Colors[theme].text,
-      fontWeight: '700',
-      fontFamily: Fonts.sans,
+      fontWeight: '600',
       fontSize: 15,
     },
 
     accountEmail: {
       color: Colors[theme].muted,
-      fontFamily: Fonts.sans,
       fontSize: 13,
       marginTop: 2,
     },
 
     secondaryButton: {
-      backgroundColor: theme === 'dark' ? '#1a2534' : '#eaf0fb',
+      backgroundColor: Colors[theme].inputBg,
       borderRadius: 999,
       paddingHorizontal: 12,
       paddingVertical: 7,
@@ -104,8 +100,7 @@ export const SettingsStyle = (theme: 'light' | 'dark') =>
 
     secondaryButtonText: {
       color: Colors[theme].primary,
-      fontFamily: Fonts.sans,
-      fontWeight: '700',
+      fontWeight: '600',
       fontSize: 13,
     },
 
@@ -127,24 +122,16 @@ export const SettingsStyle = (theme: 'light' | 'dark') =>
       gap: 10,
     },
 
-    settingLabelWrap: {
-      flex: 1,
-      paddingRight: 8,
-    },
-
     settingLabel: {
       color: Colors[theme].text,
       fontSize: 15,
-      fontWeight: '700',
-      fontFamily: Fonts.sans,
+      fontWeight: '600',
     },
 
     settingHint: {
       color: Colors[theme].muted,
       fontSize: 12,
       marginTop: 3,
-      fontFamily: Fonts.sans,
-      lineHeight: 18,
     },
 
     categoryRow: {
@@ -156,9 +143,9 @@ export const SettingsStyle = (theme: 'light' | 'dark') =>
 
     categoryChip: {
       paddingHorizontal: 14,
-      paddingVertical: 9,
+      paddingVertical: 8,
       borderRadius: 999,
-      backgroundColor: theme === 'dark' ? '#182534' : '#eaf0fb',
+      backgroundColor: Colors[theme].inputBg,
       borderWidth: 1,
       borderColor: Colors[theme].border,
     },
@@ -170,10 +157,8 @@ export const SettingsStyle = (theme: 'light' | 'dark') =>
 
     categoryChipText: {
       color: Colors[theme].text,
-      fontWeight: '700',
-      fontFamily: Fonts.sans,
+      fontWeight: '600',
       fontSize: 13,
-      textTransform: 'capitalize',
     },
 
     categoryChipTextActive: {
@@ -200,30 +185,23 @@ export const SettingsStyle = (theme: 'light' | 'dark') =>
       color: Colors[theme].text,
       fontSize: 15,
       fontWeight: '600',
-      fontFamily: Fonts.sans,
     },
 
     logoutButton: {
-      marginTop: 4,
-      backgroundColor: '#dc2626',
+      marginTop: 10,
+      backgroundColor: '#ef4444',
       borderRadius: 14,
       paddingVertical: 14,
       alignItems: 'center',
       justifyContent: 'center',
       flexDirection: 'row',
       gap: 8,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 8 },
-      shadowOpacity: 0.2,
-      shadowRadius: 14,
-      elevation: 3,
     },
 
     logoutText: {
       color: '#fff',
-      fontFamily: Fonts.rounded,
       fontSize: 16,
-      fontWeight: '800',
+      fontWeight: '700',
     },
   });
 

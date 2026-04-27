@@ -1,5 +1,5 @@
-import { Colors } from '@/constants/theme';
-import { StyleSheet } from 'react-native';
+import { Colors, Fonts } from '@/constants/theme';
+import { StyleSheet, Platform } from 'react-native';
 
 export const AuthStyle = (theme: 'light' | 'dark') => StyleSheet.create({
   container: {
@@ -14,6 +14,7 @@ export const AuthStyle = (theme: 'light' | 'dark') => StyleSheet.create({
     marginBottom: 8,
     color: Colors[theme].text,
     textAlign: 'center',
+    fontFamily: Fonts.rounded,
   },
   mintitle: {
     fontSize: 18,
@@ -24,7 +25,7 @@ export const AuthStyle = (theme: 'light' | 'dark') => StyleSheet.create({
   },
   subtitle: {
     marginBottom: 25,
-    fontWeight: '700',
+    fontWeight: '600',
     color: Colors[theme].muted,
     textAlign: 'center',
     fontSize: 15,
@@ -33,15 +34,14 @@ export const AuthStyle = (theme: 'light' | 'dark') => StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors[theme].border,
     padding: 14,
-    borderRadius: 14,
+    borderRadius: 12,
     marginBottom: 15,
     color: Colors[theme].inputText,
-
     backgroundColor: Colors[theme].inputBg,
   },
   buttonText: {
-    color: Colors[theme].buttonText,
-    fontWeight: '600',
+    color: '#fff',
+    fontWeight: '700',
     fontSize: 16,
   },
   footer: {
@@ -52,18 +52,152 @@ export const AuthStyle = (theme: 'light' | 'dark') => StyleSheet.create({
   },
   link: {
     color: Colors[theme].primary,
-    fontWeight: '900',
+    fontWeight: '800',
     fontSize: 16,
-
   },
   button: {
     backgroundColor: Colors[theme].primary,
     padding: 16,
-    borderRadius: 16,
+    borderRadius: 14,
     alignItems: 'center',
     marginTop: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  glassContainer: {
+    backgroundColor: Colors[theme].card,
+    borderRadius: 24,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: Colors[theme].border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  sectionTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors[theme].text,
+    marginBottom: 8,
+    marginTop: 10,
+    opacity: 0.7,
+  },
+  genderContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  genderButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors[theme].inputBg,
+    paddingVertical: 12,
+    borderRadius: 12,
+    marginHorizontal: 4,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  genderButtonActive: {
+    backgroundColor: Colors[theme].primary,
+    borderColor: Colors[theme].primary,
+  },
+  genderText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors[theme].muted,
+    marginLeft: 6,
+  },
+  genderTextActive: {
+    color: '#fff',
+    fontWeight: '700',
+  },
+  dobContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 10,
+    backgroundColor: Colors[theme].card,
+    borderRadius: 16,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: Colors[theme].border,
+  },
+  dobColumn: {
+    flex: 1,
+    height: 180,
+    marginHorizontal: 4,
+  },
+  dobItem: {
+    paddingVertical: 14,
+    alignItems: 'center',
+    borderRadius: 12,
+    marginVertical: 2,
+  },
+  dobItemActive: {
+    backgroundColor: Colors[theme].primary,
+  },
+  dobText: {
+    color: Colors[theme].text,
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  dobTextActive: {
+    color: '#fff',
+    fontWeight: '700',
+  },
+  dobModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  dobModalContent: {
+    backgroundColor: Colors[theme].background,
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    padding: 24,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
+  },
+  dobModalTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: Colors[theme].text,
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  closeButton: {
+    backgroundColor: Colors[theme].primary,
+    padding: 16,
+    borderRadius: 18,
+    alignItems: 'center',
+    marginTop: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  closeButtonText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 16,
+  },
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors[theme].inputBg,
+    borderWidth: 1,
+    borderColor: Colors[theme].border,
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    height: 56,
+    marginBottom: 12,
   },
 });
-
 
 export default AuthStyle;

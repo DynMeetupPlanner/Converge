@@ -1,8 +1,23 @@
-import { Tabs } from 'expo-router';
+import { Tabs, Redirect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-
+import { useAuth } from '@/context/AuthContext';
+import { View, ActivityIndicator } from 'react-native';
 
 export default function AppLayout() {
+  const { user, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" />
+      </View>
+    );
+  }
+
+  if (!user) {
+    return <Redirect href="/" />;
+  }
+
   return (
     <Tabs screenOptions={{ headerShown: false, tabBarStyle: { height: 70, paddingBottom: 10 ,paddingTop: 10 } }}>
       <Tabs.Screen
@@ -18,9 +33,9 @@ export default function AppLayout() {
       <Tabs.Screen
         name="saved"
         options={{
-          title: 'saved',
+          title: 'Saved',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="person" size={size} color={color} />
+            <Ionicons name="bookmark" size={size} color={color} />
           ),
         }}
       />
@@ -28,7 +43,7 @@ export default function AppLayout() {
       <Tabs.Screen
         name="settings"
         options={{
-          title: 'settings',
+          title: 'Settings',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="settings" size={size} color={color} />
           ),

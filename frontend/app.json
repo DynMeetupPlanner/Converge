@@ -28,7 +28,6 @@
     },
     "plugins": [
       "expo-router",
-      
       [
         "expo-splash-screen",
         {
@@ -42,7 +41,6 @@
         }
       ],
       "expo-web-browser",
-      
       "expo-router",
       "expo-web-browser",
       [
@@ -50,15 +48,12 @@
         {
           "locationAlwaysAndWhenInUsePermission": "Allow Converge to use your location to find midpoints."
         }
-      ]
-      
-
-      
+      ],
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
     }
-    
   }
 }

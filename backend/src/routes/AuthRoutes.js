@@ -6,8 +6,8 @@ const router = express.Router();
 
 router.post('/register', async (req, res) => {
   try {
-    const { name, username, email, password, dateOfBirth } = req.body;
-    if (!name || !username || !email || !password || !dateOfBirth) {
+    const { name, username, email, password, dateOfBirth, gender } = req.body;
+    if (!name || !username || !email || !password || !dateOfBirth || !gender) {
       return res.status(400).json({ msg: 'All fields required' });
     }
     const dob = new Date(dateOfBirth);
@@ -27,6 +27,7 @@ router.post('/register', async (req, res) => {
       email,
       passwordHash,
       dateOfBirth: dob,
+      gender,
     });
     await user.save();
     res.status(201).json({ msg: 'User registered successfully' });
@@ -55,6 +56,80 @@ router.post('/login', async (req, res) => {
       name: user.name,
       email: user.email
     }});
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ msg: 'Server error' });
+  }
+});
+
+router.put('/update', async (req, res) => {
+  try {
+    const { id, name, email } = req.body;
+    if (!id) return res.status(400).json({ msg: 'User ID required' });
+    
+    // Check if email is already taken by another user
+    if (email) {
+      const emailExists = await User.findOne({ email, _id: { $ne: id } });
+      if (emailExists) return res.status(400).json({ msg: 'Email already in use' });
+    }
+
+    const user = await User.findById(id);
+    if (!user) return res.status(404).json({ msg: 'User not found' });
+
+    if (name) user.name = name;
+    if (email) user.email = email;
+
+    await user.save();
+    res.status(200).json({ 
+      msg: 'Profile updated', 
+      user: { id: user._id, name: user.name, email: user.email } 
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ msg: 'Server error' });
+  }
+});
+
+router.post('/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+    const user = await User.findOne({ email });
+    if (!user) return res.status(404).json({ msg: 'User not found' });
+
+    // Generate 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    user.resetPasswordOTP = otp;
+    user.resetPasswordExpires = Date.now() + 600000; // 10 minutes
+    await user.save();
+
+    // MOCK EMAIL SENDING
+    console.log(`[OTP SENT TO ${email}]: ${otp}`);
+    
+    res.status(200).json({ msg: 'OTP sent to your email' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ msg: 'Server error' });
+  }
+});
+
+router.post('/reset-password', async (req, res) => {
+  try {
+    const { email, otp, newPassword } = req.body;
+    const user = await User.findOne({ 
+      email, 
+      resetPasswordOTP: otp,
+      resetPasswordExpires: { $gt: Date.now() }
+    });
+
+    if (!user) return res.status(400).json({ msg: 'Invalid or expired OTP' });
+
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    user.passwordHash = passwordHash;
+    user.resetPasswordOTP = undefined;
+    user.resetPasswordExpires = undefined;
+    await user.save();
+
+    res.status(200).json({ msg: 'Password reset successfully' });
   } catch (err) {
     console.error(err);
     res.status(500).json({ msg: 'Server error' });
