@@ -11,6 +11,7 @@ import HomeStyle from '../styles/HomeStyle';
 type Person = { name: string };
 type Category = 'all' | 'cafe' | 'restaurant' | 'park';
 type Coords = { latitude: number; longitude: number };
+type GeocodeResult = Coords & { name: string };
 type PlaceResult = {
   _id: string;
   name: string;
@@ -51,17 +52,19 @@ function calcMidpoint(coords: Coords[]): Coords {
   };
 }
 
-async function geocode(address: string): Promise<Coords | null> {
-  const results = await Location.geocodeAsync(address);
-
-  if (!results.length) {
-    return null;
+async function geocode(address: string): Promise<GeocodeResult | null> {
+  if (!API_URL) {
+    throw new Error('Set EXPO_PUBLIC_API_URL before searching locations.');
   }
 
-  return {
-    latitude: results[0].latitude,
-    longitude: results[0].longitude,
-  };
+  const response = await fetch(`${API_URL}/geo/search?q=${encodeURIComponent(address)}`);
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.msg || 'Failed to search location.');
+  }
+
+  return data.location ?? null;
 }
 
 export default function HomeScreen() {
@@ -215,6 +218,9 @@ export default function HomeScreen() {
       if (shouldFetch) {
         await fetchPlaces(nextMidpoint);
       }
+    } catch (error) {
+      console.error('Search failed:', error);
+      setLocationError(error instanceof Error ? error.message : 'Search failed.');
     } finally {
       setLoading(false);
     }
@@ -234,7 +240,7 @@ export default function HomeScreen() {
       </View>
       <Text style={styles.title}>Find your perfect midpoint</Text>
       <Text style={styles.subtitle}>
-        Add everyone's start locations and discover spots that are fair for the whole group.
+        Add each start location and discover spots that are fair for the whole group.
       </Text>
 
       <View style={styles.mapCard}>
