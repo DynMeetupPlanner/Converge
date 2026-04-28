@@ -3,6 +3,7 @@ import AuthRoutes from "./routes/AuthRoutes.js";
 import { connectDB } from "./config/db.js";
 import dotenv from "dotenv";
 import PlaceRoutes from "./routes/PlaceRoutes.js";
+import GeoRoutes from "./routes/GeoRoutes.js";
 
 dotenv.config();
 
@@ -14,6 +15,7 @@ app.use(express.json());
 connectDB();
 
 app.use("/Auth", AuthRoutes);
+app.use("/geo", GeoRoutes);
 app.use("/places", PlaceRoutes);
 
 app.get("/", (req, res) => {

@@ -52,13 +52,36 @@ function calcMidpoint(coords: Coords[]): Coords {
   };
 }
 
+async function readBackendJson(response: Response, route: string) {
+  const contentType = response.headers.get('content-type') ?? '';
+  const rawBody = await response.text();
+
+  if (!contentType.includes('application/json')) {
+    const compactBody = rawBody.replace(/\s+/g, ' ').trim();
+    const routeMissing = compactBody.includes(`Cannot GET ${route}`) || response.status === 404;
+
+    if (routeMissing) {
+      throw new Error(`The backend at EXPO_PUBLIC_API_URL does not have ${route} deployed yet.`);
+    }
+
+    throw new Error(`Expected JSON from the backend, got ${contentType || 'non-JSON response'} instead.`);
+  }
+
+  try {
+    return JSON.parse(rawBody);
+  } catch {
+    throw new Error('The backend returned invalid JSON.');
+  }
+}
+
 async function geocode(address: string): Promise<GeocodeResult | null> {
   if (!API_URL) {
     throw new Error('Set EXPO_PUBLIC_API_URL before searching locations.');
   }
 
-  const response = await fetch(`${API_URL}/geo/search?q=${encodeURIComponent(address)}`);
-  const data = await response.json();
+  const route = '/geo/search';
+  const response = await fetch(`${API_URL}${route}?q=${encodeURIComponent(address)}`);
+  const data = await readBackendJson(response, route);
 
   if (!response.ok) {
     throw new Error(data.msg || 'Failed to search location.');
@@ -142,23 +165,11 @@ export default function HomeScreen() {
     lastFetchCoords.current = coords;
 
     try {
+      const route = '/places/nearby';
       const response = await fetch(
-        `${API_URL}/places/nearby?lat=${coords.latitude}&lng=${coords.longitude}&radius=${FETCH_RADIUS_KM}`
+        `${API_URL}${route}?lat=${coords.latitude}&lng=${coords.longitude}&radius=${FETCH_RADIUS_KM}`
       );
-      const contentType = response.headers.get('content-type') ?? '';
-      const rawBody = await response.text();
-
-      if (!contentType.includes('application/json')) {
-        const compactBody = rawBody.replace(/\s+/g, ' ').trim();
-        if (compactBody.includes('Cannot GET /places/nearby')) {
-          setLocationError('The backend at EXPO_PUBLIC_API_URL does not have /places/nearby deployed yet.');
-        } else {
-          setLocationError(`Expected JSON from the backend, got ${contentType || 'non-JSON response'} instead.`);
-        }
-        return;
-      }
-
-      const data = JSON.parse(rawBody);
+      const data = await readBackendJson(response, route);
 
       if (!response.ok) {
         setLocationError(data.msg || 'Failed to fetch places.');
@@ -168,7 +179,7 @@ export default function HomeScreen() {
       setAllPlaces(data.places ?? []);
     } catch (error) {
       console.error('Failed to fetch places:', error);
-      setLocationError('Failed to fetch places.');
+      setLocationError(error instanceof Error ? error.message : 'Failed to fetch places.');
     } finally {
       isFetching.current = false;
     }
