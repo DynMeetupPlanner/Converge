@@ -10,6 +10,7 @@ import { API_URL } from '@/lib/api';
 
 
 export default function HomeScreen() {
+  console.log("API_URL:", API_URL);
   const theme = useColorScheme();
   const styles = AuthStyle(theme);
   const [email, setEmail] = useState('');
