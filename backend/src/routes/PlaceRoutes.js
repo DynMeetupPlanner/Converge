@@ -125,9 +125,12 @@ router.get('/nearby', async (req, res) => {
 
     return res.json({ places, source: 'openstreetmap' });
   } catch (err) {
-    console.error('Nearby places failed:', err);
-    return res.status(500).json({ msg: 'Server error' });
-  }
+      console.error("Nearby places failed:", err); // already there
+      return res.status(500).json({ 
+        msg: "Server error",
+        error: err.message
+      });
+    }
 });
 
 export default router;
