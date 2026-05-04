@@ -1,17 +1,13 @@
 import express from 'express';
 
 const router = express.Router();
-const OVERPASS_URL = process.env.OVERPASS_URL || 'https://overpass.kumi.systems/api/interpreter';
+const OVERPASS_URL = process.env.OVERPASS_URL || 'https://overpass-api.de/api/interpreter';
 const USER_AGENT = process.env.OSM_USER_AGENT || 'ConvergeApp/1.0';
 
 const CATEGORY_FILTERS = {
-  cafe: ['node["amenity"="cafe"]', 'way["amenity"="cafe"]', 'relation["amenity"="cafe"]'],
-  restaurant: [
-    'node["amenity"="restaurant"]',
-    'way["amenity"="restaurant"]',
-    'relation["amenity"="restaurant"]',
-  ],
-  park: ['node["leisure"="park"]', 'way["leisure"="park"]', 'relation["leisure"="park"]'],
+  cafe: ['node["amenity"="cafe"]'],
+  restaurant: ['node["amenity"="restaurant"]'],
+  park: ['node["leisure"="park"]'],
 };
 
 function buildOverpassQuery(latitude, longitude, radius, category) {
@@ -129,17 +125,21 @@ router.get('/nearby', async (req, res) => {
 
     // 5. Add timeout (prevents hanging)
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
+    const timeout = setTimeout(() => controller.abort(), 15000);
 
-    const response = await fetch(url, {
-      method: "GET",
-      headers: {
-        "User-Agent": USER_AGENT,
-      },
-      signal: controller.signal,
-    });
+    let response;
+    try {
+      response = await fetch(url, {
+        method: "GET",
+        headers: {
+          "User-Agent": USER_AGENT,
+        },
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
 
-    clearTimeout(timeout);
 
     // 6. Read safely (DO NOT use response.json directly)
     const raw = await response.text();
@@ -178,15 +178,19 @@ router.get('/nearby', async (req, res) => {
     });
 
   } catch (err) {
-    console.error("Nearby places failed:", err);
-    console.error("CAUSE:", err.cause);
+      console.error("Nearby places failed:", err);
 
-    return res.status(500).json({
-      msg: "Server error",
-      error: err.message,
-      cause: err.cause?.message,
-    });
-  }
+      if (err.name === "AbortError") {
+        return res.status(504).json({
+          msg: "Request timeout",
+        });
+      }
+
+      return res.status(500).json({
+        msg: "Server error",
+        error: err.message,
+      });
+    }
 });
 
 
