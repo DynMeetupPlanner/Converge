@@ -1,315 +1,456 @@
 import { StyleSheet, Platform } from 'react-native';
-import { Colors, Fonts } from '@/constants/theme';
 
-export const HomeStyle = (theme: 'light' | 'dark') =>
-  StyleSheet.create({
-    container: {
-      flex: 1,
-    },
+// 🎨 Colors
+export const C = {
+  bg: '#08090E',
+  surface: '#0F1118',
+  card: '#141720',
+  border: '#1E2235',
+  accent: '#6C7FFF',
+  accentSoft: 'rgba(108,127,255,0.12)',
+  glow: 'rgba(108,127,255,0.35)',
+  green: '#2ECC8A',
+  greenSoft: 'rgba(46,204,138,0.12)',
+  red: '#FF5C72',
+  redSoft: 'rgba(255,92,114,0.12)',
+  amber: '#FFC14D',
+  text: '#EDF0FF',
+  textSub: '#8B91B0',
+  textMuted: '#3E4460',
+  white: '#FFFFFF',
+};
 
-    contentContainer: {
-      paddingHorizontal: 24,
-      paddingTop: 17,
-      paddingBottom: 40,
-    },
+// 🎨 Styles
+export const s = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: C.bg,
+  },
+  scroll: {
+    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'android' ? 48 : 16,
+    paddingBottom: 20,
+  },
 
-    glassCard: {
-      backgroundColor: Colors[theme].card,
-      borderRadius: 16,
-      padding: 16,
-      marginBottom: 16,
-      borderWidth: 1,
-      borderColor: Colors[theme].border,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 4,
-      elevation: 3,
-    },
+  // Header
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  logoBadge: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: C.accentSoft,
+    borderWidth: 1,
+    borderColor: C.accent + '55',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  appName: {
+    fontSize: 13,
+    fontWeight: '800',
+    letterSpacing: 3,
+    color: C.text,
+  },
+  tagline: {
+    fontSize: 11,
+    color: C.textMuted,
+    letterSpacing: 0.3,
+    marginTop: 1,
+  },
+  liveChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: C.greenSoft,
+    borderWidth: 1,
+    borderColor: C.green + '44',
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    gap: 5,
+  },
+  liveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: C.green,
+  },
+  liveText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: C.green,
+    letterSpacing: 1.5,
+  },
 
-    headerRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      marginBottom: 12,
-      paddingTop: Platform.OS === 'ios' ? 40 : 20,
-    },
+  // Map
+  mapWrapper: {
+    borderRadius: 20,
+    overflow: 'hidden',
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: C.border,
+    backgroundColor: C.surface,
+  },
+  map: {
+    width: '100%',
+    height: 220,
+  },
+  mapBadge: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(8,9,14,0.75)',
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  mapBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 0.3,
+  },
+  mapStats: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderTopWidth: 1,
+    borderTopColor: C.border,
+    backgroundColor: C.surface,
+  },
+  mapStatItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  mapStatVal: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: C.text,
+    letterSpacing: 0.5,
+  },
+  mapStatLabel: {
+    fontSize: 10,
+    color: C.textMuted,
+    marginTop: 2,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  mapStatDivider: {
+    width: 1,
+    height: 28,
+    backgroundColor: C.border,
+  },
 
-    eyebrow: {
-      color: Colors[theme].muted,
-      fontSize: 14,
-      fontWeight: '600',
-    },
+  // Section
+  section: {
+    marginBottom: 24,
+  },
+  sectionHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 14,
+  },
+  sectionLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: C.textMuted,
+    letterSpacing: 2,
+    textTransform: 'uppercase',
+  },
+  countPill: {
+    backgroundColor: C.accentSoft,
+    borderRadius: 20,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: C.accent + '44',
+  },
+  countPillText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: C.accent,
+  },
 
-    sparkleBadge: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 6,
-      paddingHorizontal: 10,
-      paddingVertical: 6,
-      borderRadius: 999,
-      backgroundColor: Colors[theme].inputBg,
-    },
+  // Person row
+  personRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 10,
+  },
+  avatar: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  avatarText: {
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  inputWrap: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: C.card,
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    height: 46,
+  },
+  input: {
+    flex: 1,
+    fontSize: 14,
+    color: C.text,
+    fontWeight: '500',
+  },
+  clearBtn: {
+    padding: 4,
+    marginLeft: 4,
+  },
+  removeBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: C.redSoft,
+    borderWidth: 1,
+    borderColor: C.red + '44',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  addBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 4,
+    alignSelf: 'flex-start',
+  },
+  addBtnIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 9,
+    backgroundColor: C.accentSoft,
+    borderWidth: 1,
+    borderColor: C.accent + '44',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addBtnText: {
+    fontSize: 13,
+    color: C.accent,
+    fontWeight: '600',
+  },
 
-    sparkleText: {
-      color: Colors[theme].primary,
-      fontSize: 12,
-      fontWeight: '700',
-    },
+  // Categories
+  catRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 12,
+  },
+  catBtn: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderRadius: 14,
+    backgroundColor: C.card,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  catBtnActive: {
+    backgroundColor: C.accent,
+    borderColor: C.accent,
+  },
+  catLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: C.textSub,
+    letterSpacing: 0.3,
+  },
+  catLabelActive: {
+    color: C.white,
+  },
 
-    title: {
-      fontSize: 28,
-      fontWeight: '700',
-      marginBottom: 8,
-      color: Colors[theme].text,
-    },
+  // Error
+  errorBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: C.redSoft,
+    borderWidth: 1,
+    borderColor: C.red + '44',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+  },
+  errorText: {
+    fontSize: 13,
+    color: C.red,
+    fontWeight: '500',
+    flex: 1,
+  },
 
-    subtitle: {
-      color: Colors[theme].muted,
-      fontSize: 15,
-      marginBottom: 20,
-    },
+  // CTA
+  cta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: C.accent,
+    borderRadius: 18,
+    height: 58,
+    marginBottom: 28,
+    shadowColor: C.accent,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.45,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  ctaLoading: {
+    opacity: 0.7,
+  },
+  ctaText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: C.white,
+    letterSpacing: 0.5,
+  },
+  ctaArrow: {
+    position: 'absolute',
+    right: 18,
+    width: 30,
+    height: 30,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 
-    mapCard: {
-      borderRadius: 16,
-      overflow: 'hidden',
-      marginBottom: 20,
-      borderWidth: 1,
-      borderColor: Colors[theme].border,
-    },
+  // Results
+  resultsHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  resultsCount: {
+    fontSize: 12,
+    color: C.textMuted,
+    fontWeight: '600',
+  },
 
-    map: {
-      height: 240,
-    },
+  // Empty
+  emptyCard: {
+    backgroundColor: C.card,
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 18,
+    padding: 32,
+    alignItems: 'center',
+    borderStyle: 'dashed',
+  },
+  emptyIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    backgroundColor: C.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  emptyTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: C.textSub,
+    marginBottom: 6,
+  },
+  emptyMsg: {
+    fontSize: 13,
+    color: C.textMuted,
+    textAlign: 'center',
+    lineHeight: 19,
+  },
 
-    mapOverlay: {
-      position: 'absolute',
-      left: 12,
-      bottom: 12,
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 6,
-      backgroundColor: Colors[theme].card,
-      paddingHorizontal: 12,
-      paddingVertical: 8,
-      borderRadius: 12,
-      borderWidth: 1,
-      borderColor: Colors[theme].border,
-    },
-
-    mapOverlayText: {
-      color: Colors[theme].text,
-      fontWeight: '600',
-      fontSize: 12,
-    },
-
-    sectionCard: {
-      backgroundColor: Colors[theme].card,
-      borderColor: Colors[theme].border,
-      borderWidth: 1,
-      borderRadius: 16,
-      padding: 14,
-      marginBottom: 14,
-    },
-
-    sectionTitle: {
-      color: Colors[theme].text,
-      fontSize: 18,
-      fontWeight: '700',
-      marginBottom: 4,
-    },
-
-    sectionHint: {
-      color: Colors[theme].muted,
-      fontSize: 13,
-    },
-
-    personCard: {
-      backgroundColor: Colors[theme].inputBg,
-      borderRadius: 12,
-      padding: 12,
-      marginBottom: 12,
-    },
-
-    personCardHeader: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: 6,
-    },
-
-    personCardTitle: {
-      color: Colors[theme].text,
-      fontWeight: '600',
-      fontSize: 14,
-    },
-
-    removeButton: {
-      padding: 4,
-    },
-
-    removeButtonText: {
-      color: '#ef4444',
-      fontSize: 12,
-      fontWeight: '600',
-    },
-
-    input: {
-      borderWidth: 1,
-      borderColor: Colors[theme].border,
-      backgroundColor: Colors[theme].inputBg,
-      color: Colors[theme].inputText,
-      paddingVertical: 10,
-      paddingHorizontal: 12,
-      borderRadius: 10,
-      marginBottom: 6,
-    },
-
-    addPersonButton: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 6,
-      alignSelf: 'center',
-      marginTop: 4,
-    },
-
-    addPersonText: {
-      color: Colors[theme].primary,
-      fontWeight: '600',
-      fontSize: 13,
-    },
-
-    categoryContainer: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: 8,
-      marginTop: 10,
-    },
-
-    categoryButton: {
-      paddingHorizontal: 14,
-      paddingVertical: 8,
-      borderRadius: 999,
-      backgroundColor: Colors[theme].inputBg,
-      borderWidth: 1,
-      borderColor: Colors[theme].border,
-    },
-
-    categoryActive: {
-      backgroundColor: Colors[theme].primary,
-      borderColor: Colors[theme].primary,
-    },
-
-    categoryText: {
-      color: Colors[theme].text,
-      fontWeight: '600',
-      fontSize: 13,
-    },
-
-    categoryTextActive: {
-      color: '#fff',
-    },
-
-    button: {
-      backgroundColor: Colors[theme].primary,
-      paddingVertical: 18,
-      borderRadius: 20,
-      marginBottom: 24,
-      flexDirection: 'row',
-      justifyContent: 'center',
-      alignItems: 'center',
-      gap: 12,
-      shadowColor: Colors[theme].primary,
-      shadowOffset: { width: 0, height: 6 },
-      shadowOpacity: 0.3,
-      shadowRadius: 10,
-      elevation: 6,
-    },
-
-    buttonText: {
-      color: '#fff',
-      textAlign: 'center',
-      fontWeight: '800',
-      fontSize: 18,
-      fontFamily: Fonts.rounded,
-      letterSpacing: 0.5,
-    },
-
-    resultsHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      marginBottom: 12,
-    },
-
-    resultsTitle: {
-      fontSize: 22,
-      fontWeight: '700',
-      color: Colors[theme].text,
-    },
-
-    resultsCount: {
-      color: Colors[theme].muted,
-      fontSize: 13,
-    },
-
-    emptyCard: {
-      padding: 16,
-      borderRadius: 14,
-      borderWidth: 1,
-      borderColor: Colors[theme].border,
-      backgroundColor: Colors[theme].inputBg,
-      marginBottom: 10,
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 10,
-    },
-
-    emptyText: {
-      color: Colors[theme].muted,
-      fontSize: 14,
-      flex: 1,
-    },
-
-    card: {
-      padding: 14,
-      borderWidth: 1,
-      borderColor: Colors[theme].border,
-      borderRadius: 14,
-      marginBottom: 10,
-      backgroundColor: Colors[theme].card,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-    },
-
-    cardTitle: {
-      color: Colors[theme].text,
-      fontWeight: '600',
-      fontSize: 15,
-    },
-
-    cardSub: {
-      color: Colors[theme].muted,
-      marginTop: 2,
-      fontSize: 13,
-    },
-
-    ratingPill: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 4,
-      backgroundColor: Colors[theme].inputBg,
-      borderRadius: 8,
-      paddingHorizontal: 8,
-      paddingVertical: 4,
-    },
-
-    ratingText: {
-      color: Colors[theme].text,
-      fontWeight: '700',
-      fontSize: 12,
-    },
-  });
-
-export default HomeStyle;
+  // Place card
+  placeCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: C.card,
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 8,
+    gap: 12,
+  },
+  placeIndex: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  placeIndexText: {
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  placeInfo: {
+    flex: 1,
+  },
+  placeName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: C.text,
+    marginBottom: 4,
+  },
+  placeMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  catDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+    marginRight: 5,
+  },
+  placeCategory: {
+    fontSize: 11,
+    color: C.textSub,
+    fontWeight: '600',
+    textTransform: 'capitalize',
+  },
+  placeVicinity: {
+    fontSize: 11,
+    color: C.textMuted,
+    flex: 1,
+  },
+  ratingBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: 'rgba(255,193,77,0.12)',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderWidth: 1,
+    borderColor: 'rgba(255,193,77,0.25)',
+  },
+  ratingVal: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: C.amber,
+  },
+});
