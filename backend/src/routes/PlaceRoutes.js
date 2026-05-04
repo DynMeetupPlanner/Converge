@@ -94,6 +94,8 @@ router.get('/nearby', async (req, res) => {
     }
 
     const overpassQuery = buildOverpassQuery(latitude, longitude, Math.round(maxDistance), category);
+    console.log("Query:", overpassQuery);
+    console.log("URL:", OVERPASS_URL);
     const response = await fetch(OVERPASS_URL, {
       method: 'POST',
       headers: {
