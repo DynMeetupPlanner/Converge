@@ -1,7 +1,7 @@
 import express from 'express';
 
 const router = express.Router();
-const OVERPASS_URL = process.env.OVERPASS_URL || 'https://overpass-api.de/api/interpreter';
+const OVERPASS_URL = process.env.OVERPASS_URL || 'https://overpass.kumi.systems/api/interpreter';
 const USER_AGENT = process.env.OSM_USER_AGENT || 'ConvergeApp/1.0';
 
 const CATEGORY_FILTERS = {
@@ -15,19 +15,30 @@ const CATEGORY_FILTERS = {
 };
 
 function buildOverpassQuery(latitude, longitude, radius, category) {
-  const categories = category && category !== 'all' ? [category] : Object.keys(CATEGORY_FILTERS);
-  const filters = categories.flatMap((item) => CATEGORY_FILTERS[item] || []);
-  const nearbyFilters = filters
-    .map((filter) => `${filter}(around:${radius},${latitude},${longitude});`)
-    .join('\n');
+  const categories =
+    category && category !== "all"
+      ? [category]
+      : Object.keys(CATEGORY_FILTERS);
 
-  return `
-    [out:json][timeout:25];
-    (
-      ${nearbyFilters}
-    );
-    out center 60;
-  `;
+  const filters = categories.flatMap(
+    (item) => CATEGORY_FILTERS[item] || []
+  );
+
+  if (!filters.length) {
+    throw new Error("No filters generated");
+  }
+
+  const nearbyFilters = filters
+    .map(
+      (f) => `${f}(around:${radius},${latitude},${longitude});`
+    )
+    .join("\n");
+
+  return `[out:json][timeout:10];
+(
+${nearbyFilters}
+);
+out center 50;`;
 }
 
 function getCategory(tags = {}) {
@@ -75,12 +86,15 @@ function formatPlace(element) {
 
 router.get('/nearby', async (req, res) => {
   try {
-    const { lat, lng, radius = 5, category } = req.query;
+    // 1. Safer defaults
+    const { lat, lng, radius = 0.3, category = "all" } = req.query;
+
     const latitude = parseFloat(lat);
     const longitude = parseFloat(lng);
     const radiusKm = parseFloat(radius);
-    const maxDistance = radiusKm * 1000;
+    const maxDistance = Math.round(radiusKm * 1000); // meters
 
+    // 2. Validation
     if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
       return res.status(400).json({ msg: 'Valid lat and lng are required' });
     }
@@ -89,50 +103,91 @@ router.get('/nearby', async (req, res) => {
       return res.status(400).json({ msg: 'Radius must be a positive number' });
     }
 
-    if (category && category !== 'all' && !CATEGORY_FILTERS[category]) {
+    if (category !== 'all' && !CATEGORY_FILTERS[category]) {
       return res.status(400).json({ msg: 'Unsupported category' });
     }
 
-    const overpassQuery = buildOverpassQuery(latitude, longitude, Math.round(maxDistance), category);
-    console.log("Query:", overpassQuery);
-    console.log("URL:", OVERPASS_URL);
-    const response = await fetch(OVERPASS_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
-        'User-Agent': USER_AGENT,
-        Accept: 'application/json',
-      },
-      body: new URLSearchParams({ data: overpassQuery }).toString(),
-    });
+    // 3. Build query
+    const overpassQuery = buildOverpassQuery(
+      latitude,
+      longitude,
+      maxDistance,
+      category
+    );
 
-    if (!response.ok) {
-      return res.status(response.status).json({ msg: 'Places service failed' });
+    if (!overpassQuery || !overpassQuery.trim()) {
+      throw new Error("Generated Overpass query is empty");
     }
 
-    const data = await response.json();
+    console.log("QUERY:\n", overpassQuery);
+
+    // 4. Use GET (same as your working browser test)
+    const encodedQuery = encodeURIComponent(overpassQuery);
+    const url = `${OVERPASS_URL}?data=${encodedQuery}`;
+
+    console.log("REQUEST URL:", url);
+
+    // 5. Add timeout (prevents hanging)
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        "User-Agent": USER_AGENT,
+      },
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeout);
+
+    // 6. Read safely (DO NOT use response.json directly)
+    const raw = await response.text();
+
+    let data;
+    try {
+      data = JSON.parse(raw);
+    } catch (e) {
+      console.error("Invalid Overpass response:", raw.slice(0, 300));
+      throw new Error("Overpass returned non-JSON");
+    }
+
+    if (!response.ok) {
+      throw new Error(`Overpass error: ${response.status}`);
+    }
+
+    // 7. Process results
     const seen = new Set();
+
     const places = (data.elements || [])
       .map(formatPlace)
       .filter(Boolean)
       .filter((place) => {
-        if (seen.has(place._id)) {
-          return false;
-        }
-
+        if (seen.has(place._id)) return false;
         seen.add(place._id);
         return true;
       })
       .slice(0, 50);
 
-    return res.json({ places, source: 'openstreetmap' });
+    console.log("Results count:", places.length);
+
+    return res.json({
+      places,
+      count: places.length,
+      source: "openstreetmap",
+    });
+
   } catch (err) {
-      console.error("Nearby places failed:", err); // already there
-      return res.status(500).json({ 
-        msg: "Server error",
-        error: err.message
-      });
-    }
+    console.error("Nearby places failed:", err);
+    console.error("CAUSE:", err.cause);
+
+    return res.status(500).json({
+      msg: "Server error",
+      error: err.message,
+      cause: err.cause?.message,
+    });
+  }
 });
+
 
 export default router;
