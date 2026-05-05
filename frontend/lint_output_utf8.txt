@@ -1,0 +1,53 @@
+﻿
+> frontend@1.0.0 lint
+> expo lint
+
+
+C:\1Data\Ved_Data\AmritaCSE\Research\Research_Sem6\SoftwareEngineering\sturdy-goggles\frontend\app\(app)\home.tsx
+  10:3  warning  'StyleSheet' is defined but never used      @typescript-eslint/no-unused-vars
+  12:3  warning  'Platform' is defined but never used        @typescript-eslint/no-unused-vars
+  19:9  warning  'width' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\1Data\Ved_Data\AmritaCSE\Research\Research_Sem6\SoftwareEngineering\sturdy-goggles\frontend\app\(app)\maps.tsx
+  8:10  warning  'GradientBackground' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\1Data\Ved_Data\AmritaCSE\Research\Research_Sem6\SoftwareEngineering\sturdy-goggles\frontend\app\(app)\plans\[id].tsx
+   16:20  warning  'Plan' is defined but never used                                                                                     @typescript-eslint/no-unused-vars
+   51:6   warning  React Hook useEffect has a missing dependency: 'fetchPlanDetails'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  205:77  error    `'` can be escaped with `&apos;`, `&lsquo;`, `&#39;`, `&rsquo;`                                                      react/no-unescaped-entities
+  239:67  error    `'` can be escaped with `&apos;`, `&lsquo;`, `&#39;`, `&rsquo;`                                                      react/no-unescaped-entities
+
+C:\1Data\Ved_Data\AmritaCSE\Research\Research_Sem6\SoftwareEngineering\sturdy-goggles\frontend\app\(app)\plans\[id]\add-members.tsx
+   1:38  warning  'useCallback' is defined but never used  @typescript-eslint/no-unused-vars
+  10:3   warning  'FlatList' is defined but never used     @typescript-eslint/no-unused-vars
+  70:14  warning  'err' is defined but never used          @typescript-eslint/no-unused-vars
+
+C:\1Data\Ved_Data\AmritaCSE\Research\Research_Sem6\SoftwareEngineering\sturdy-goggles\frontend\app\(app)\plans\create.tsx
+  51:14  warning  'err' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\1Data\Ved_Data\AmritaCSE\Research\Research_Sem6\SoftwareEngineering\sturdy-goggles\frontend\app\(app)\plans\index.tsx
+  45:6  warning  React Hook useEffect has a missing dependency: 'fetchPlans'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\1Data\Ved_Data\AmritaCSE\Research\Research_Sem6\SoftwareEngineering\sturdy-goggles\frontend\app\(app)\saved.tsx
+  8:3  warning  'Platform' is defined but never used    @typescript-eslint/no-unused-vars
+  9:3  warning  'StyleSheet' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\1Data\Ved_Data\AmritaCSE\Research\Research_Sem6\SoftwareEngineering\sturdy-goggles\frontend\app\(app)\settings.tsx
+   9:3   warning  'Platform' is defined but never used    @typescript-eslint/no-unused-vars
+  13:3   warning  'StyleSheet' is defined but never used  @typescript-eslint/no-unused-vars
+  92:14  warning  'err' is defined but never used         @typescript-eslint/no-unused-vars
+
+C:\1Data\Ved_Data\AmritaCSE\Research\Research_Sem6\SoftwareEngineering\sturdy-goggles\frontend\app\(auth)\index.tsx
+  13:3   warning  'StyleSheet' is defined but never used           @typescript-eslint/no-unused-vars
+  41:19  warning  'setLoading' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\1Data\Ved_Data\AmritaCSE\Research\Research_Sem6\SoftwareEngineering\sturdy-goggles\frontend\app\_layout.tsx
+  12:1  warning  Import in body of module; reorder to top  import/first
+  13:1  warning  Import in body of module; reorder to top  import/first
+
+C:\1Data\Ved_Data\AmritaCSE\Research\Research_Sem6\SoftwareEngineering\sturdy-goggles\frontend\app\styles\AuthStyle.tsx
+  2:10  warning  'Colors' is defined but never used  @typescript-eslint/no-unused-vars
+
+Γ£û 23 problems (2 errors, 21 warnings)
+  0 errors and 2 warnings potentially fixable with the `--fix` option.
+

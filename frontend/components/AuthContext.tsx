@@ -1,15 +1,15 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import React, { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from 'expo-router';
 
-type AuthContextValue = {
+interface AuthContextType {
   token: string | null;
-  loading: boolean;
   login: (token: string) => Promise<void>;
   logout: () => Promise<void>;
-};
+  loading: boolean;
+}
 
-const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
@@ -18,29 +18,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const loadToken = async () => {
       const storedToken = await AsyncStorage.getItem("token");
-      if (storedToken) {
-        setToken(storedToken);
-      }
+      if (storedToken) setToken(storedToken);
       setLoading(false);
     };
-
     loadToken();
   }, []);
 
-  const login = async (nextToken: string) => {
-    await AsyncStorage.setItem("token", nextToken);
-    setToken(nextToken);
-    router.replace("/(tabs)");
+  const login = async (token: string) => {
+    await AsyncStorage.setItem("token", token);
+    setToken(token);
+    router.replace("/home");
   };
 
   const logout = async () => {
     await AsyncStorage.removeItem("token");
     setToken(null);
-    router.replace("/(auth)");
+    router.replace("/");
   };
 
   return (
-    <AuthContext.Provider value={{ token, loading, login, logout }}>
+    <AuthContext.Provider value={{ token, login, logout, loading }}>
       {children}
     </AuthContext.Provider>
   );
@@ -48,10 +45,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
-
-  if (!context) {
+  if (context === undefined) {
     throw new Error('useAuth must be used within an AuthProvider');
   }
-
   return context;
 };

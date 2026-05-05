@@ -1,115 +1,177 @@
-import { View, Text, TextInput, TouchableOpacity, ScrollView, Platform } from 'react-native';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { Colors } from '@/constants/theme';
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  ScrollView,
+  Platform,
+  KeyboardAvoidingView,
+  Modal,
+  ActivityIndicator,
+  SafeAreaView,
+  StyleSheet,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { AuthStyle } from '../styles/AuthStyle';
-import { useState } from 'react';
-import { useAuth } from '@/components/AuthContext';
-import { API_URL } from '@/lib/api';
+import { useAuth } from '@/context/AuthContext';
+import { GradientBackground } from '@/components/GradientBackground';
+import { s } from '../styles/AuthStyle';
 
+// 🎨 Theme
+const C = {
+  bg: '#08090E',
+  card: '#141720',
+  border: '#1E2235',
+  accent: '#6C7FFF',
+  accentSoft: 'rgba(108,127,255,0.12)',
+  red: '#FF5C72',
+  text: '#EDF0FF',
+  textMuted: '#3E4460',
+  textSub: '#8B91B0',
+  white: '#FFFFFF',
+};
 
+export default function LoginScreen() {
+  const { login } = useAuth();
 
-export default function HomeScreen() {
-  console.log("API_URL:", API_URL);
-  const theme = useColorScheme();
-  const styles = AuthStyle(theme);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const { login ,token} = useAuth();
+  const [loading, setLoading] = useState(false);
+
+  const [isForgotModalVisible, setIsForgotModalVisible] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
 
   const handleLogin = async () => {
-  if (!email || !password) {
-    setError("All fields required");
-    return;
-  }
-
-  
-  try {
-    const res = await fetch(`${API_URL}/Auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
-    });
-
-    const data = await res.json();
-    if (!res.ok) {
-      setError(data.msg || "Login failed");
+    if (!email || !password) {
+      setError('All fields required');
       return;
     }
 
-    if (res.ok) {
-      await login(data.token);
-      
-    }
-    console.log("Success:", data);
-    setError('');
+    try {
+      const res = await fetch('https://sturdy-goggles-1033249426470.asia-south1.run.app/Auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
 
-  } catch (err) {
-    console.log("Network error:", err);
-  }
-};
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.msg || 'Login failed');
+        return;
+      }
+
+      if (data.user) await login(data.user);
+
+      setError('');
+      router.replace('/home');
+    } catch {
+      setError('Network error. Please try again.');
+    }
+  };
 
   return (
-  <View style={{ flex: 1, backgroundColor: Colors[theme].background }}>
-    <ScrollView
-      style={{ flex: 1, backgroundColor: Colors[theme].background }}
-      contentContainerStyle={{
-        flexGrow: 1,
-        justifyContent: 'center',
-        padding: 20,
-        paddingTop: 5,
-        paddingBottom: Platform.OS === 'android' ? 180 : 24,
-      }}
-      keyboardShouldPersistTaps="handled"
-      keyboardDismissMode="none"
-      showsVerticalScrollIndicator={false}
-      scrollEnabled
-    >
-      <Text style={styles.title}>Converge</Text>
-      <Text style={styles.subtitle}>
-        <Text style={styles.mintitle}>Sign in</Text> to find your perfect meeting spots
-      </Text>
-
-      <TextInput
-        placeholder="Email"
-        style={styles.input}
-        value={email}
-        onChangeText={setEmail}
-        placeholderTextColor={Colors[theme].placeholder}
-        selectionColor={Colors[theme].primary}
-      />
-
-      <TextInput
-        placeholder="Password"
-        secureTextEntry
-        style={styles.input}
-        value={password}
-        onChangeText={setPassword}
-        placeholderTextColor={Colors[theme].placeholder}
-        selectionColor={Colors[theme].primary}
-      />
-
-      {error ? (
-        <Text style={{ color: '#e11d48', marginBottom: 10, textAlign: 'center' }}>
-          {error}
-        </Text>
-      ) : null}
-
-      <TouchableOpacity style={styles.button} onPress={handleLogin}>
-        <Text style={styles.buttonText}>Sign In</Text>
-      </TouchableOpacity>
-
-      <Text style={styles.footer}>
-        Don't have an account?{' '}
-        <Text
-          style={styles.link}
-          onPress={() => router.replace('/register')}
+    <GradientBackground>
+      <SafeAreaView style={s.root}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1 }}
         >
-          Sign up
-        </Text>
-      </Text>
-    </ScrollView>
-  </View>
+          <ScrollView contentContainerStyle={s.scroll}>
+
+            {/* ── Header ── */}
+            <View style={s.header}>
+              <View style={s.logo}>
+                <Ionicons name="git-merge" size={36} color={C.accent} />
+              </View>
+              <Text style={s.title}>CONVERGE</Text>
+              <Text style={s.subtitle}>Meet in the middle — fair for everyone</Text>
+            </View>
+
+            {/* ── Card ── */}
+            <View style={s.card}>
+              <Text style={s.cardTitle}>Welcome Back</Text>
+
+              <View style={s.input}>
+                <Ionicons name="mail-outline" size={16} color={C.textMuted} />
+                <TextInput
+                  placeholder="Email"
+                  placeholderTextColor={C.textMuted}
+                  value={email}
+                  onChangeText={setEmail}
+                  style={s.inputText}
+                />
+              </View>
+
+              <View style={s.input}>
+                <Ionicons name="lock-closed-outline" size={16} color={C.textMuted} />
+                <TextInput
+                  placeholder="Password"
+                  secureTextEntry
+                  placeholderTextColor={C.textMuted}
+                  value={password}
+                  onChangeText={setPassword}
+                  style={s.inputText}
+                />
+              </View>
+
+              {error ? (
+                <View style={s.errorBox}>
+                  <Text style={s.errorText}>{error}</Text>
+                </View>
+              ) : null}
+
+              <TouchableOpacity
+                onPress={() => setIsForgotModalVisible(true)}
+                style={s.forgot}
+              >
+                <Text style={s.forgotText}>Forgot Password?</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={s.button} onPress={handleLogin}>
+                {loading
+                  ? <ActivityIndicator color={C.white} />
+                  : <Text style={s.buttonText}>Sign In</Text>}
+              </TouchableOpacity>
+
+              <TouchableOpacity onPress={() => router.replace('/register')}>
+                <Text style={s.footer}>
+                  Don’t have an account? <Text style={s.link}>Sign up</Text>
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+          </ScrollView>
+        </KeyboardAvoidingView>
+
+        {/* ── Modal ── */}
+        <Modal visible={isForgotModalVisible} transparent animationType="slide">
+          <View style={s.modalBackdrop}>
+            <View style={s.modal}>
+              <Text style={s.modalTitle}>Reset Password</Text>
+
+              <TextInput
+                placeholder="Enter email"
+                placeholderTextColor={C.textMuted}
+                value={forgotEmail}
+                onChangeText={setForgotEmail}
+                style={s.input}
+              />
+
+              <TouchableOpacity style={s.button}>
+                <Text style={s.buttonText}>Send OTP</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity onPress={() => setIsForgotModalVisible(false)}>
+                <Text style={s.cancel}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+
+      </SafeAreaView>
+    </GradientBackground>
   );
 }

@@ -9,8 +9,7 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.darkshaderz224.frontend"
+      "supportsTablet": true
     },
     "android": {
       "adaptiveIcon": {
@@ -21,8 +20,7 @@
       },
       "softwareKeyboardLayoutMode": "resize",
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false,
-      "package": "com.darkshaderz224.frontend"
+      "predictiveBackGestureEnabled": false
     },
     "web": {
       "output": "static",
@@ -42,13 +40,16 @@
           }
         }
       ],
+      "expo-web-browser",
+      "expo-router",
+      "expo-web-browser",
       [
         "expo-location",
         {
           "locationAlwaysAndWhenInUsePermission": "Allow Converge to use your location to find midpoints."
         }
       ],
-      "expo-web-browser"
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": true,

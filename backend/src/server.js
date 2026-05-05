@@ -2,32 +2,30 @@ import express from "express";
 import AuthRoutes from "./routes/AuthRoutes.js";
 import { connectDB } from "./config/db.js";
 import dotenv from "dotenv";
-import PlaceRoutes from "./routes/PlaceRoutes.js";
-import GeoRoutes from "./routes/GeoRoutes.js";
+import PlaceRoutes from './routes/PlaceRoutes.js';
+import OsmRoutes from "./routes/OsmRoutes.js";
+import PlanRoutes from "./routes/PlanRoutes.js";
 
-dotenv.config();
+dotenv.config()
 
 const PORT = process.env.PORT || 8080;
-const app = express();
-
-app.use(express.json());
+const app = express()
+app.use(express.json())
 
 connectDB();
 
-app.use("/Auth", AuthRoutes);
-app.use("/geo", GeoRoutes);
-app.use("/places", PlaceRoutes);
+app.use('/Auth', AuthRoutes)
+app.use('/users', AuthRoutes)
+app.use('/places', PlaceRoutes);
+app.use("/osm", OsmRoutes);
+app.use("/plans", PlanRoutes);
 
-app.get("/", (req, res) => {
-  res.status(200).json({
-    status: "ok",
-    service: "Converge API",
-    uptime: process.uptime(),
-    timestamp: new Date().toISOString(),
-    env: process.env.NODE_ENV || "development",
-  });
+app.get('/',(req,res)=>{
+    res.send("this is a testr ")
+    console.log("test")
 });
 
-app.listen(PORT, "0.0.0.0", () => {
-  console.log("Server has started and listening on port: ", PORT);
-});
+
+app.listen(PORT,'0.0.0.0',()=>{
+    console.log("Server has started and listening on port: ",PORT)
+})

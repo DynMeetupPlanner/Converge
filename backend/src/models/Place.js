@@ -6,7 +6,7 @@ const placeSchema = new mongoose.Schema({
   rating: { type: Number },
   location: {
     type: { type: String, default: 'Point' },
-    coordinates: [Number],
+    coordinates: [Number], // [lng, lat] — MongoDB order
   },
 });
 

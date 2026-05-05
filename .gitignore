@@ -5,19 +5,8 @@ frontend/node_modules/
 backend/node_modules/
 
 # Expo
-frontend/android
-frontend/ios
-frontend/.vscode
-frontend/.expo
-backend/.env
-frontend/.env
 
-.env
-.env.*
-!.env.example
-*.swp
-*.swo
-frontend/.expo/
+
 
 # Native
 *.orig.*
@@ -45,3 +34,5 @@ yarn-error.*
 *.tsbuildinfo
 
 
+frontend/.expo/cache/eslint/.cache_6quzow
+backend/.env
