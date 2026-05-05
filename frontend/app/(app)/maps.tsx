@@ -69,7 +69,7 @@ export default function DynamicMap() {
             key={marker.id}
             coordinate={{ latitude: marker.latitude, longitude: marker.longitude }}
             draggable
-            onLongPress={() =>
+            onPress={() =>
               setMarkers((prev) => prev.filter((m) => m.id !== marker.id))
             }
           />

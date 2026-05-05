@@ -31,6 +31,37 @@ export default function AppLayout() {
       />
 
       <Tabs.Screen
+        name="plans/index"
+        options={{
+          title: 'Plans',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="calendar" size={size} color={color} />
+          ),
+        }}
+      />
+
+      <Tabs.Screen
+        name="plans/create"
+        options={{
+          href: null,
+        }}
+      />
+
+      <Tabs.Screen
+        name="plans/[id]"
+        options={{
+          href: null,
+        }}
+      />
+
+      <Tabs.Screen
+        name="plans/[id]/add-members"
+        options={{
+          href: null,
+        }}
+      />
+
+      <Tabs.Screen
         name="saved"
         options={{
           title: 'Saved',

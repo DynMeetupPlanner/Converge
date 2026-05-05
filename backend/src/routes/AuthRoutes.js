@@ -136,6 +136,32 @@ router.post('/reset-password', async (req, res) => {
   }
 });
 
+// Search users
+router.get('/search', async (req, res) => {
+  try {
+    const { query } = req.query;
+    if (!query) return res.json({ users: [] });
+
+    const users = await User.find({
+      $or: [
+        { name: { $regex: query, $options: 'i' } },
+        { username: { $regex: query, $options: 'i' } }
+      ]
+    }).limit(10).select('name username _id');
+
+    const formattedUsers = users.map(u => ({
+      id: u._id,
+      name: u.name,
+      username: u.username
+    }));
+
+    res.json({ users: formattedUsers });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ msg: 'Server error' });
+  }
+});
+
 export default router;
 /*
 router
