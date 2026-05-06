@@ -14,8 +14,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { usePlans, User } from '@/context/PlanContext';
 import { s, C } from '../../../../tempStyles/PlanStyle';
+import { API_URL } from '@/lib/api';
 
-const API_BASE = 'https://sturdy-goggles-1033249426470.asia-south1.run.app';
+const API_BASE = API_URL || 'https://sturdy-goggles-1033249426470.asia-south1.run.app';
 
 export default function AddMembersScreen() {
   const { id: planId } = useLocalSearchParams();
@@ -36,10 +37,13 @@ export default function AddMembersScreen() {
     const timer = setTimeout(async () => {
       setSearching(true);
       try {
-        const res = await fetch(`${API_BASE}/users/search?query=${query}`);
+        const res = await fetch(`${API_BASE}/users/search?query=${encodeURIComponent(query.trim())}`);
         const data = await res.json();
         if (res.ok) {
           setResults(data.users || []);
+        } else {
+          setResults([]);
+          console.error('Search failed:', data.msg);
         }
       } catch (err) {
         console.error('Search error:', err);
@@ -61,12 +65,13 @@ export default function AddMembersScreen() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userIds: selectedUsers.map(u => u.id) }),
       });
+      const data = await res.json();
 
       if (res.ok) {
         clearSelectedUsers();
         router.replace(`/plans/${planId}`);
       } else {
-        alert('Failed to send invites');
+        alert(data.msg || 'Failed to send invites');
       }
     } catch (err) {
       alert('Network error');
