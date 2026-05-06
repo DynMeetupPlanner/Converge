@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   View,
   Text,
@@ -8,15 +9,14 @@ import {
   Platform,
   KeyboardAvoidingView,
   Modal,
-  ActivityIndicator,
-  SafeAreaView,
+  ActivityIndicator,  
   StyleSheet,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { GradientBackground } from '@/components/GradientBackground';
-import { s } from '../styles/AuthStyle';
+import { s } from '../../tempStyles/AuthStyle';
 
 // 🎨 Theme
 const C = {

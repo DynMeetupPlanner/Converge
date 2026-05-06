@@ -6,7 +6,7 @@ import * as Location from 'expo-location';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Colors } from '@/constants/theme';
 import { API_URL } from '@/lib/api';
-import HomeStyle from '../styles/HomeStyle';
+import HomeStyle from '../../tempStyles/HomeStyle';
 
 type Person = { name: string };
 type Category = 'all' | 'cafe' | 'restaurant' | 'park';

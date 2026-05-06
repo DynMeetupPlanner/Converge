@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Colors } from '@/constants/theme';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
-import SavedStyle from '../styles/SavedStyle';
+import SavedStyle from '../../tempStyles/SavedStyle';
 
 type PlaceStatus = 'saved' | 'visited';
 type SavedFilter = 'all' | PlaceStatus;

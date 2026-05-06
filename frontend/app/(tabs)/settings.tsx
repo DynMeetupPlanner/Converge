@@ -3,7 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Colors } from '@/constants/theme';
-import SettingsStyle from '../styles/SettingsStyle';
+import SettingsStyle from '../../tempStyles/SettingsStyle';
 import { useAuth } from '@/components/AuthContext';
 
 type DefaultCategory = 'all' | 'cafe' | 'restaurant' | 'park';

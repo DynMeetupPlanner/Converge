@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
-  ScrollView,
-  SafeAreaView,
+  ScrollView,  
   ActivityIndicator,
   StyleSheet,
   Dimensions,
@@ -14,7 +14,7 @@ import {
 import MapView, { Marker, Circle, Region } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
-import { s } from '../styles/HomeStyle';
+import { s } from '../../tempStyles/HomeStyle';
 
 const { width } = Dimensions.get('window');
 

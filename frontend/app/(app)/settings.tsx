@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   View,
   Text,
-  ScrollView,
-  SafeAreaView,
+  ScrollView,  
   TouchableOpacity,
   Switch,
   Platform,
@@ -15,7 +15,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
-import { s } from '../styles/SettingsStyle';
+import { s } from '../../tempStyles/SettingsStyle';
 
 // ── Palette (matches HomeScreen & SavedScreen) ────────────────────
 const C = {

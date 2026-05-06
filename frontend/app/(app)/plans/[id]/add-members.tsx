@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   View,
   Text,
@@ -6,13 +7,13 @@ import {
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
-  SafeAreaView,
+  
   FlatList,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { usePlans, User } from '@/context/PlanContext';
-import { s, C } from '../../../styles/PlanStyle';
+import { s, C } from '../../../../tempStyles/PlanStyle';
 
 const API_BASE = 'https://sturdy-goggles-1033249426470.asia-south1.run.app';
 

@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   View,
   Text,
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
-  SafeAreaView,
   RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,7 +14,7 @@ import * as Location from 'expo-location';
 import MapView, { Marker, Circle } from 'react-native-maps';
 import { useAuth } from '@/context/AuthContext';
 import { usePlans, Plan } from '@/context/PlanContext';
-import { s, C } from '../../styles/PlanStyle';
+import { s, C } from '../../../tempStyles/PlanStyle';
 
 const API_BASE = 'https://sturdy-goggles-1033249426470.asia-south1.run.app';
 

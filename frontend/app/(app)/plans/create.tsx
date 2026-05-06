@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   View,
   Text,
@@ -6,13 +7,12 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   KeyboardAvoidingView,
-  Platform,
-  SafeAreaView,
+  Platform,  
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
-import { s, C } from '../../styles/PlanStyle';
+import { s, C } from '../../../tempStyles/PlanStyle';
 
 const API_BASE = 'https://sturdy-goggles-1033249426470.asia-south1.run.app';
 

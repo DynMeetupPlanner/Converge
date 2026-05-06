@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   View,
   Text,
@@ -7,13 +8,12 @@ import {
   ScrollView,
   Platform,
   KeyboardAvoidingView,
-  Modal,
-  SafeAreaView,
+  Modal,  
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { GradientBackground } from '@/components/GradientBackground';
-import { s, C } from '../styles/AuthStyle';
+import { s, C } from '../../tempStyles/AuthStyle';
 
 export default function RegisterScreen() {
   const [name, setName] = useState('');

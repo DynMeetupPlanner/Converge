@@ -1,15 +1,15 @@
 import React, { useState } from 'react';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   View,
   Text,
   ScrollView,
-  SafeAreaView,
   TouchableOpacity,
   Platform,
   StyleSheet,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { s } from '../styles/SavedStyle';
+import { s } from '../../tempStyles/SavedStyle';
 
 const SAVED_DATA = [
   { id: '1', name: 'Blue Tokai Coffee',  category: 'cafe',       rating: 4.5, visited: true,  distance: '1.2 km' },
