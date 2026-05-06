@@ -1,22 +1,35 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   View,
   Text,
   ScrollView,
   TouchableOpacity,
-  Platform,
-  StyleSheet,
+  ActivityIndicator,
+  RefreshControl,
+  Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { s } from '../../tempStyles/SavedStyle';
+import { useAuth } from '@/context/AuthContext';
+import { API_URL } from '@/lib/api';
 
-const SAVED_DATA = [
-  { id: '1', name: 'Blue Tokai Coffee',  category: 'cafe',       rating: 4.5, visited: true,  distance: '1.2 km' },
-  { id: '2', name: 'Toscano Restaurant', category: 'restaurant', rating: 4.2, visited: false, distance: '0.8 km' },
-  { id: '3', name: 'Cubbon Park',        category: 'park',       rating: 4.8, visited: true,  distance: '2.5 km' },
-  { id: '4', name: 'Third Wave Coffee',  category: 'cafe',       rating: 4.3, visited: false, distance: '1.5 km' },
-];
+const API_BASE = API_URL || 'https://sturdy-goggles-1033249426470.asia-south1.run.app';
+
+type SavedPlace = {
+  _id?: string;
+  placeId: string;
+  name: string;
+  category: string;
+  rating?: number | null;
+  status: 'saved' | 'visited';
+  vicinity?: string;
+  links?: {
+    maps?: string;
+    zomato?: string;
+    swiggy?: string;
+  };
+};
 
 // ── Palette (matches HomeScreen) ─────────────────────────────────
 const C = {
@@ -57,16 +70,53 @@ const FILTERS = [
 ];
 
 export default function SavedScreen() {
+  const { user } = useAuth();
   const [filter, setFilter] = useState('all');
+  const [places, setPlaces] = useState<SavedPlace[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const filteredData = SAVED_DATA.filter((item) => {
-    if (filter === 'visited')   return item.visited;
-    if (filter === 'unvisited') return !item.visited;
+  const fetchSavedPlaces = React.useCallback(async () => {
+    if (!user?.id) return;
+    try {
+      const res = await fetch(`${API_BASE}/places/saved?userId=${user.id}`);
+      const data = await res.json();
+      if (res.ok) setPlaces(data.places || []);
+    } catch (err) {
+      console.error('Saved places error:', err);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    fetchSavedPlaces();
+  }, [fetchSavedPlaces]);
+
+  const markVisited = async (place: SavedPlace) => {
+    if (!user?.id) return;
+    try {
+      const res = await fetch(`${API_BASE}/places/saved/${encodeURIComponent(place.placeId)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id, status: place.status === 'visited' ? 'saved' : 'visited' }),
+      });
+      const data = await res.json();
+      if (res.ok) setPlaces(data.places || []);
+    } catch (err) {
+      console.error('Update saved place error:', err);
+    }
+  };
+
+  const filteredData = places.filter((item) => {
+    if (filter === 'visited')   return item.status === 'visited';
+    if (filter === 'unvisited') return item.status !== 'visited';
     return true;
   });
 
-  const visitedCount   = SAVED_DATA.filter((i) => i.visited).length;
-  const unvisitedCount = SAVED_DATA.filter((i) => !i.visited).length;
+  const visitedCount   = places.filter((i) => i.status === 'visited').length;
+  const unvisitedCount = places.filter((i) => i.status !== 'visited').length;
 
   return (
     <SafeAreaView style={s.root}>
@@ -74,6 +124,7 @@ export default function SavedScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={s.scroll}
         keyboardShouldPersistTaps="handled"
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchSavedPlaces(); }} tintColor={C.accent} />}
       >
 
         {/* ── Header ── */}
@@ -86,7 +137,7 @@ export default function SavedScreen() {
             <Text style={s.tagline}>Your saved & visited spots</Text>
           </View>
           <View style={s.countChip}>
-            <Text style={s.countChipText}>{SAVED_DATA.length}</Text>
+            <Text style={s.countChipText}>{places.length}</Text>
             <Text style={s.countChipLabel}> saved</Text>
           </View>
         </View>
@@ -97,7 +148,7 @@ export default function SavedScreen() {
             <View style={[s.statIcon, { backgroundColor: C.accentSoft, borderColor: C.accent + '44' }]}>
               <Ionicons name="location" size={16} color={C.accent} />
             </View>
-            <Text style={s.statVal}>{SAVED_DATA.length}</Text>
+            <Text style={s.statVal}>{places.length}</Text>
             <Text style={s.statLabel}>Total Spots</Text>
           </View>
 
@@ -125,7 +176,9 @@ export default function SavedScreen() {
         </View>
 
         {/* ── Cards ── */}
-        {filteredData.length === 0 ? (
+        {loading ? (
+          <ActivityIndicator color={C.accent} style={{ marginTop: 30 }} />
+        ) : filteredData.length === 0 ? (
           <View style={s.emptyCard}>
             <View style={s.emptyIcon}>
               <Ionicons name="bookmark-outline" size={28} color={C.textMuted} />
@@ -137,8 +190,9 @@ export default function SavedScreen() {
           filteredData.map((item) => {
             const dot   = CAT_COLORS[item.category] ?? C.accent;
             const icon  = CAT_ICONS[item.category]  ?? 'location';
+            const isVisited = item.status === 'visited';
             return (
-              <TouchableOpacity key={item.id} style={s.placeCard} activeOpacity={0.8}>
+              <TouchableOpacity key={item.placeId} style={s.placeCard} activeOpacity={0.8} onPress={() => Linking.openURL(item.links?.maps || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.name)}`)}>
 
                 {/* Category icon */}
                 <View style={[s.catIcon, { backgroundColor: dot + '18', borderColor: dot + '55' }]}>
@@ -151,7 +205,7 @@ export default function SavedScreen() {
                   <View style={s.placeMeta}>
                     <View style={[s.catDot, { backgroundColor: dot }]} />
                     <Text style={s.placeCategory}>{item.category}</Text>
-                    <Text style={s.placeDist}> · {item.distance}</Text>
+                    {item.vicinity ? <Text style={s.placeDist}> · {item.vicinity}</Text> : null}
                   </View>
                 </View>
 
@@ -160,25 +214,25 @@ export default function SavedScreen() {
                   {/* Rating */}
                   <View style={s.ratingBox}>
                     <Ionicons name="star" size={10} color={C.amber} />
-                    <Text style={s.ratingVal}>{item.rating.toFixed(1)}</Text>
+                    <Text style={s.ratingVal}>{item.rating ? item.rating.toFixed(1) : '—'}</Text>
                   </View>
 
                   {/* Status pill */}
-                  <View style={[
+                  <TouchableOpacity style={[
                     s.statusPill,
-                    item.visited
+                    isVisited
                       ? { backgroundColor: C.greenSoft, borderColor: C.green + '44' }
                       : { backgroundColor: C.accentSoft, borderColor: C.accent + '44' },
-                  ]}>
+                  ]} onPress={() => markVisited(item)}>
                     <Ionicons
-                      name={item.visited ? 'checkmark' : 'bookmark'}
+                      name={isVisited ? 'checkmark' : 'bookmark'}
                       size={10}
-                      color={item.visited ? C.green : C.accent}
+                      color={isVisited ? C.green : C.accent}
                     />
-                    <Text style={[s.statusText, { color: item.visited ? C.green : C.accent }]}>
-                      {item.visited ? 'Visited' : 'Saved'}
+                    <Text style={[s.statusText, { color: isVisited ? C.green : C.accent }]}>
+                      {isVisited ? 'Visited' : 'Saved'}
                     </Text>
-                  </View>
+                  </TouchableOpacity>
                 </View>
 
                 <Ionicons name="chevron-forward" size={14} color={C.textMuted} style={{ marginLeft: 6 }} />

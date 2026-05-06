@@ -84,6 +84,36 @@ const userSchema = new mongoose.Schema({
     resetPasswordExpires: {
       type: Date,
     },
+    savedPlaces: [{
+      placeId: String,
+      name: String,
+      category: String,
+      rating: Number,
+      ratingSource: String,
+      priceLevel: String,
+      vicinity: String,
+      openingHours: String,
+      phone: String,
+      website: String,
+      status: {
+        type: String,
+        enum: ['saved', 'visited'],
+        default: 'saved',
+      },
+      location: {
+        latitude: Number,
+        longitude: Number,
+      },
+      links: {
+        maps: String,
+        zomato: String,
+        swiggy: String,
+      },
+      savedAt: {
+        type: Date,
+        default: Date.now,
+      },
+    }],
 },{
     timestamps: true
 });

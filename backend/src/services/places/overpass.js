@@ -16,6 +16,15 @@ const CATEGORY_QUERIES = {
     'way["leisure"="park"]',
     'relation["leisure"="park"]',
   ],
+  mall: [
+    'node["shop"="mall"]',
+    'way["shop"="mall"]',
+    'relation["shop"="mall"]',
+  ],
+  bar: [
+    'node["amenity"="bar"]',
+    'node["amenity"="pub"]',
+  ],
 };
 
 function clampRadiusMeters(radiusKm) {
@@ -43,8 +52,23 @@ function toPlace(elements, category) {
         _id: `osm-${el.type}-${el.id}`,
         name,
         rating: null,
+        ratingSource: 'unavailable_on_osm',
         category,
         vicinity: vicinityParts.join(' ') || undefined,
+        openingHours: el.tags?.opening_hours,
+        phone: el.tags?.phone || el.tags?.['contact:phone'],
+        website: el.tags?.website || el.tags?.['contact:website'],
+        cuisine: el.tags?.cuisine,
+        wheelchair: el.tags?.wheelchair,
+        priceLevel: el.tags?.price || el.tags?.['price:range'] || el.tags?.['payment:cash'] ? 'unknown' : undefined,
+        tags: {
+          amenity: el.tags?.amenity,
+          leisure: el.tags?.leisure,
+          shop: el.tags?.shop,
+          opening_hours: el.tags?.opening_hours,
+          cuisine: el.tags?.cuisine,
+          wheelchair: el.tags?.wheelchair,
+        },
         location: { coordinates: [lon, lat] },
       };
     })
@@ -56,15 +80,17 @@ function detectCategory(tags) {
   const leisure = tags?.leisure;
 
   if (leisure === 'park') return 'park';
+  if (tags?.shop === 'mall') return 'mall';
   if (amenity === 'cafe' || amenity === 'coffee_shop') return 'cafe';
   if (amenity === 'restaurant' || amenity === 'fast_food') return 'restaurant';
+  if (amenity === 'bar' || amenity === 'pub') return 'bar';
 
   return null;
 }
 
 function buildOverpassQuery({ lat, lng, radiusMeters, category }) {
   const cats = category === 'all'
-    ? /** @type {const} */ (['cafe', 'restaurant', 'park'])
+    ? /** @type {const} */ (['cafe', 'restaurant', 'park', 'mall', 'bar'])
     : [category];
 
   const blocks = cats.flatMap((cat) => {

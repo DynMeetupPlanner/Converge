@@ -14,6 +14,22 @@ export interface Member {
     longitude: number;
   };
   preference?: string;
+  travelMode?: 'walking' | 'driving' | 'transit';
+  availability?: {
+    day: string;
+    startTime: string;
+    endTime: string;
+  }[];
+}
+
+export interface PlanVote {
+  placeId: string;
+  userId: string;
+  place?: {
+    placeId: string;
+    name: string;
+    category?: string;
+  };
 }
 
 export interface Plan {
@@ -25,6 +41,15 @@ export interface Plan {
     latitude: number;
     longitude: number;
   };
+  votes?: PlanVote[];
+  meetingHistory?: {
+    place: {
+      placeId: string;
+      name: string;
+      category?: string;
+    };
+    decidedAt: string;
+  }[];
   createdAt: string;
 }
 

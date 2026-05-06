@@ -417,4 +417,21 @@ export const s = StyleSheet.create({
   chipTextActive: {
     color: C.white,
   },
+  ratingBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: C.surface,
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    alignSelf: 'flex-start',
+  },
+  ratingVal: {
+    color: C.textSub,
+    fontSize: 11,
+    fontWeight: '800',
+  },
 });

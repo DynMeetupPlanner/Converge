@@ -2,7 +2,7 @@ import mongoose from 'mongoose';
 
 const placeSchema = new mongoose.Schema({
   name: { type: String, required: true },
-  category: { type: String, enum: ['cafe', 'restaurant', 'park'], required: true },
+  category: { type: String, enum: ['cafe', 'restaurant', 'park', 'mall', 'bar'], required: true },
   rating: { type: Number },
   location: {
     type: { type: String, default: 'Point' },
