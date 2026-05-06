@@ -15,6 +15,7 @@ import MapView, { Marker, Circle, Region } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 import { s } from '../../tempStyles/HomeStyle';
+import { API_URL } from '@/lib/api';
 
 const { width } = Dimensions.get('window');
 
@@ -39,7 +40,7 @@ const CATEGORY_LABELS: Record<Category, { label: string; icon: string }> = {
 
 const FETCH_RADIUS_KM = 5;
 const REFETCH_THRESHOLD_KM = 2;
-const API_BASE = 'https://sturdy-goggles-1033249426470.asia-south1.run.app';
+const API_BASE = API_URL || 'https://sturdy-goggles-1033249426470.asia-south1.run.app';
 
 // Palette
 const C = {
@@ -466,4 +467,3 @@ export default function HomeScreen() {
     </SafeAreaView>
   );
 }
-

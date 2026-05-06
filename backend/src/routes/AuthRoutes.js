@@ -139,26 +139,30 @@ router.post('/reset-password', async (req, res) => {
 // Search users
 router.get('/search', async (req, res) => {
   try {
-    const { query } = req.query;
-    if (!query) return res.json({ users: [] });
+    const rawQuery = Array.isArray(req.query.query) ? req.query.query[0] : req.query.query;
+    const query = String(rawQuery || '').trim();
+    if (query.length < 2) return res.json({ users: [] });
+
+    const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
     const users = await User.find({
       $or: [
-        { name: { $regex: query, $options: 'i' } },
-        { username: { $regex: query, $options: 'i' } }
+        { name: { $regex: escapedQuery, $options: 'i' } },
+        { username: { $regex: escapedQuery, $options: 'i' } },
+        { email: { $regex: escapedQuery, $options: 'i' } }
       ]
-    }).limit(10).select('name username _id');
+    }).limit(10).select('name username email _id').lean();
 
     const formattedUsers = users.map(u => ({
-      id: u._id,
-      name: u.name,
-      username: u.username
+      id: String(u._id),
+      name: u.name || u.email || 'User',
+      username: u.username || u.email
     }));
 
     res.json({ users: formattedUsers });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ msg: 'Server error' });
+    console.error('User search error:', err);
+    res.status(500).json({ msg: 'User search failed' });
   }
 });
 

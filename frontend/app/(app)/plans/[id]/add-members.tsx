@@ -7,8 +7,6 @@ import {
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
-  
-  FlatList,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -26,11 +24,13 @@ export default function AddMembersScreen() {
   const [results, setResults] = useState<User[]>([]);
   const [searching, setSearching] = useState(false);
   const [inviting, setInviting] = useState(false);
+  const [searchError, setSearchError] = useState('');
 
   // Debounced search
   useEffect(() => {
     if (query.trim().length < 2) {
       setResults([]);
+      setSearchError('');
       return;
     }
 
@@ -41,12 +41,14 @@ export default function AddMembersScreen() {
         const data = await res.json();
         if (res.ok) {
           setResults(data.users || []);
+          setSearchError('');
         } else {
           setResults([]);
-          console.error('Search failed:', data.msg);
+          setSearchError(data.msg || 'Search failed');
         }
       } catch (err) {
         console.error('Search error:', err);
+        setSearchError(`Could not reach backend: ${API_BASE}`);
       } finally {
         setSearching(false);
       }
@@ -128,9 +130,13 @@ export default function AddMembersScreen() {
         {/* Search Results */}
         <Text style={s.sectionTitle}>Results</Text>
         <ScrollView style={{ flex: 1 }} keyboardShouldPersistTaps="handled">
-          {query.length >= 2 && results.length === 0 && !searching ? (
+          {searchError ? (
             <View style={[s.empty, { paddingVertical: 30 }]}>
-              <Text style={s.emptyText}>No users found</Text>
+              <Text style={[s.emptyText, { color: C.red }]}>{searchError}</Text>
+            </View>
+          ) : query.length >= 2 && results.length === 0 && !searching ? (
+            <View style={[s.empty, { paddingVertical: 30 }]}>
+              <Text style={s.emptyText}>No registered users found for "{query.trim()}"</Text>
             </View>
           ) : (
             results.map(user => {
