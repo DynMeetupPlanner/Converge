@@ -203,24 +203,35 @@ router.post('/:id/history', async (req, res) => {
 // Invite member to plan
 router.post('/:id/invite', async (req, res) => {
   try {
-    const { userId } = req.body;
+    const { userId, userIds } = req.body;
+    const idsToInvite = Array.isArray(userIds) ? userIds : [userId].filter(Boolean);
+
+    if (idsToInvite.length === 0) {
+      return res.status(400).json({ msg: 'At least one userId is required' });
+    }
+
     const plan = await Plan.findById(req.params.id);
     if (!plan) return res.status(404).json({ msg: 'Plan not found' });
 
-    const user = await User.findById(userId);
-    if (!user) return res.status(404).json({ msg: 'User not found' });
+    const users = await User.find({ _id: { $in: idsToInvite } }).select('name');
+    if (users.length === 0) return res.status(404).json({ msg: 'No users found' });
 
-    if (plan.members.some(m => m.userId.toString() === userId)) {
-      return res.status(400).json({ msg: 'User already in plan' });
+    const existingMemberIds = new Set(plan.members.map(m => m.userId.toString()));
+    const newUsers = users.filter(user => !existingMemberIds.has(user._id.toString()));
+
+    if (newUsers.length === 0) {
+      return res.status(400).json({ msg: 'Selected users are already in this plan' });
     }
 
-    plan.members.push({
-      userId,
-      name: user.name
+    newUsers.forEach(user => {
+      plan.members.push({
+        userId: user._id,
+        name: user.name
+      });
     });
 
     await plan.save();
-    res.json({ msg: 'User invited', plan });
+    res.json({ msg: 'Users invited', invitedCount: newUsers.length, plan });
   } catch (err) {
     console.error(err);
     res.status(500).json({ msg: 'Server error' });
