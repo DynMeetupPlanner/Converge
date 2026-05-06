@@ -167,7 +167,7 @@ export default function HomeScreen() {
     try {
       const route = '/places/nearby';
       const response = await fetch(
-        `${API_URL}${route}?lat=${coords.latitude}&lng=${coords.longitude}&radius=${FETCH_RADIUS_KM}`
+        `${API_URL}${route}?lat=${coords.latitude}&lng=${coords.longitude}&radius=${FETCH_RADIUS_KM}&category=${encodeURIComponent(category)}`
       );
       const data = await readBackendJson(response, route);
 

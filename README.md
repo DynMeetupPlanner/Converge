@@ -25,6 +25,15 @@ npm install
 npm run dev
 ```
 
+### Nearby places provider
+The app calls `GET /places/nearby` to fetch nearby cafes/restaurants/parks around the computed midpoint.
+
+- Default: OpenStreetMap Overpass (no API key)
+- Optional env vars in `backend/.env`:
+  - `PLACES_PROVIDER=overpass` (or `mongo` to use MongoDB only)
+  - `OSM_USER_AGENT=your-app-name (your-email@example.com)` (recommended)
+  - `OSM_CONTACT_EMAIL=your-email@example.com` (optional)
+
 ---
 
 ## 🌐 Important: Use Your Laptop IP (for mobile/other devices)

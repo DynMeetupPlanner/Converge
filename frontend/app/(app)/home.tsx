@@ -147,7 +147,7 @@ export default function HomeScreen() {
     lastFetchCoords.current = coords;
     try {
       const res = await fetch(
-        `${API_BASE}/places/nearby?lat=${coords.latitude}&lng=${coords.longitude}&radius=${FETCH_RADIUS_KM}`
+        `${API_BASE}/places/nearby?lat=${coords.latitude}&lng=${coords.longitude}&radius=${FETCH_RADIUS_KM}&category=${encodeURIComponent(category)}`
       );
       const data = await res.json();
       setAllPlaces(data.places ?? []);
@@ -248,7 +248,7 @@ export default function HomeScreen() {
                   longitude: place.location.coordinates[0],
                 }}
                 title={place.name}
-                description={`${place.category} · ★ ${place.rating}`}
+                description={`${place.category}${place.rating ? ` · ★ ${place.rating}` : ''}`}
                 pinColor={C.green}
               />
             ))}

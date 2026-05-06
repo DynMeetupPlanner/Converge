@@ -3,7 +3,7 @@ import AuthRoutes from "./routes/AuthRoutes.js";
 import { connectDB } from "./config/db.js";
 import dotenv from "dotenv";
 import PlaceRoutes from './routes/PlaceRoutes.js';
-import OsmRoutes from "./routes/OsmRoutes.js";
+import GeoRoutes from "./routes/GeoRoutes.js";
 import PlanRoutes from "./routes/PlanRoutes.js";
 
 dotenv.config()
@@ -17,7 +17,7 @@ connectDB();
 app.use('/Auth', AuthRoutes)
 app.use('/users', AuthRoutes)
 app.use('/places', PlaceRoutes);
-app.use("/osm", OsmRoutes);
+app.use('/geo', GeoRoutes);
 app.use("/plans", PlanRoutes);
 
 app.get('/',(req,res)=>{
