@@ -4,6 +4,12 @@ import User from '../models/User.js';
 
 const router = express.Router();
 
+function formatError(error) {
+  if (!error) return 'Unknown error';
+  if (error instanceof Error) return error.message;
+  return String(error);
+}
+
 router.post('/register', async (req, res) => {
   try {
     const { name, username, email, password, dateOfBirth, gender } = req.body;
@@ -141,9 +147,22 @@ router.get('/search', async (req, res) => {
   try {
     const rawQuery = Array.isArray(req.query.query) ? req.query.query[0] : req.query.query;
     const query = String(rawQuery || '').trim();
-    if (query.length < 2) return res.json({ users: [] });
+    const debug = {
+      route: 'GET /users/search',
+      rawQuery,
+      normalizedQuery: query,
+      queryLength: query.length,
+      serverTime: new Date().toISOString(),
+    };
+
+    console.log('[users/search] incoming query:', debug);
+
+    if (query.length < 2) {
+      return res.json({ users: [], debug: { ...debug, reason: 'query_too_short' } });
+    }
 
     const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    debug.escapedQuery = escapedQuery;
 
     const users = await User.find({
       $or: [
@@ -152,6 +171,8 @@ router.get('/search', async (req, res) => {
         { email: { $regex: escapedQuery, $options: 'i' } }
       ]
     }).limit(10).select('name username email _id').lean();
+    debug.resultCount = users.length;
+    debug.resultIds = users.map((user) => String(user._id));
 
     const formattedUsers = users.map(u => ({
       id: String(u._id),
@@ -159,10 +180,19 @@ router.get('/search', async (req, res) => {
       username: u.username || u.email
     }));
 
-    res.json({ users: formattedUsers });
+    console.log('[users/search] success:', debug);
+    res.json({ users: formattedUsers, debug });
   } catch (err) {
     console.error('User search error:', err);
-    res.status(500).json({ msg: 'User search failed' });
+    res.status(500).json({
+      msg: 'User search failed',
+      debug: {
+        route: 'GET /users/search',
+        rawQuery: req.query.query,
+        error: formatError(err),
+        serverTime: new Date().toISOString(),
+      }
+    });
   }
 });
 
