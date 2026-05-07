@@ -258,7 +258,7 @@ export const s = StyleSheet.create({
   // Filter tray
   tray: {
     position: 'absolute',
-    bottom: Platform.OS === 'ios' ? 100 : 80,
+    bottom: Platform.OS === 'ios' ? 72 : 58,
     left: 20,
     right: 20,
     backgroundColor: 'rgba(8,9,14,0.92)',

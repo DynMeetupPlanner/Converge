@@ -167,4 +167,27 @@ router.patch('/saved/:placeId', async (req, res) => {
   }
 });
 
+router.delete('/saved/:placeId', async (req, res) => {
+  try {
+    const { userId } = req.query;
+    if (!userId) return res.status(400).json({ msg: 'userId required' });
+
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ msg: 'User not found' });
+
+    const beforeCount = user.savedPlaces.length;
+    user.savedPlaces = user.savedPlaces.filter((item) => item.placeId !== req.params.placeId);
+
+    if (user.savedPlaces.length === beforeCount) {
+      return res.status(404).json({ msg: 'Saved place not found' });
+    }
+
+    await user.save();
+    res.json({ msg: 'Saved place deleted', places: user.savedPlaces });
+  } catch (err) {
+    console.error('Delete saved place error:', err);
+    res.status(500).json({ msg: 'Server error' });
+  }
+});
+
 export default router;

@@ -95,7 +95,7 @@ export default function MyPlansScreen() {
           </View>
           <View style={{ flex: 1, marginLeft: 12 }}>
             <Text style={s.appName}>MY PLANS</Text>
-            <Text style={s.tagline}>Meeting up with friends</Text>
+            <Text style={s.tagline}>Meeting up</Text>
           </View>
           <View style={s.countChip}>
             <Text style={s.countChipText}>{plans.length}</Text>

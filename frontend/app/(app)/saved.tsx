@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   Linking,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { s } from '../../tempStyles/SavedStyle';
@@ -107,6 +108,38 @@ export default function SavedScreen() {
     } catch (err) {
       console.error('Update saved place error:', err);
     }
+  };
+
+  const deletePlace = (place: SavedPlace) => {
+    if (!user?.id) return;
+
+    Alert.alert(
+      'Delete saved place',
+      `Remove ${place.name} from your saved places?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const res = await fetch(`${API_BASE}/places/saved/${encodeURIComponent(place.placeId)}?userId=${user.id}`, {
+                method: 'DELETE',
+              });
+              const data = await res.json();
+              if (res.ok) {
+                setPlaces(data.places || []);
+              } else {
+                alert(data.msg || 'Could not delete saved place');
+              }
+            } catch (err) {
+              console.error('Delete saved place error:', err);
+              alert('Could not delete saved place right now');
+            }
+          },
+        },
+      ]
+    );
   };
 
   const filteredData = places.filter((item) => {
@@ -233,6 +266,20 @@ export default function SavedScreen() {
                       {isVisited ? 'Visited' : 'Saved'}
                     </Text>
                   </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[s.statusPill, { backgroundColor: C.redSoft, borderColor: C.red + '44' }]}
+                    onPress={() => deletePlace(item)}
+                  >
+                    <Ionicons
+                      name="trash-outline"
+                      size={10}
+                      color={C.red}
+                    />
+                    <Text style={[s.statusText, { color: C.red }]}>
+                      Delete
+                    </Text>
+                  </TouchableOpacity>
                 </View>
 
                 <Ionicons name="chevron-forward" size={14} color={C.textMuted} style={{ marginLeft: 6 }} />
@@ -242,7 +289,7 @@ export default function SavedScreen() {
         )}
 
         {/* Bottom padding so last card clears the filter tray */}
-        <View style={{ height: 100 }} />
+        <View style={{ height: 70 }} />
       </ScrollView>
 
       {/* ── Filter tray ── */}
