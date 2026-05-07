@@ -4,11 +4,80 @@ import User from '../models/User.js';
 import { fetchNearbyPlacesOverpass } from '../services/places/overpass.js';
 
 const router = express.Router();
+const MIN_CACHE_RESULTS = 12;
+const CACHE_STALE_MS = 1000 * 60 * 60 * 24 * 14;
+
+function buildMongoQuery({ lat, lng, radius, category }) {
+  const query = {
+    location: {
+      $nearSphere: {
+        $geometry: {
+          type: 'Point',
+          coordinates: [parseFloat(lng), parseFloat(lat)],
+        },
+        $maxDistance: parseFloat(radius) * 1000,
+      },
+    },
+  };
+
+  if (category && category !== 'all') {
+    query.category = category;
+  }
+
+  return query;
+}
+
+function mapOverpassPlaceToDocument(place) {
+  return {
+    externalId: place._id,
+    source: 'overpass',
+    name: place.name,
+    category: place.category,
+    rating: place.rating ?? null,
+    ratingSource: place.ratingSource || null,
+    vicinity: place.vicinity,
+    openingHours: place.openingHours,
+    phone: place.phone,
+    website: place.website,
+    cuisine: place.cuisine,
+    wheelchair: place.wheelchair,
+    priceLevel: place.priceLevel,
+    location: {
+      type: 'Point',
+      coordinates: place.location?.coordinates || [],
+    },
+    cachedAt: new Date(),
+    lastSeenAt: new Date(),
+  };
+}
+
+async function upsertPlaces(places) {
+  if (!places.length) return;
+
+  await Place.bulkWrite(
+    places.map((place) => ({
+      updateOne: {
+        filter: { externalId: place._id },
+        update: { $set: mapOverpassPlaceToDocument(place) },
+        upsert: true,
+      },
+    })),
+    { ordered: false }
+  );
+}
 
 // GET /places/nearby?lat=17.38&lng=78.48&radius=5&category=cafe
 router.get('/nearby', async (req, res) => {
   try {
     const { lat, lng, radius = 5, category } = req.query;
+    const mongoQuery = buildMongoQuery({ lat, lng, radius, category });
+    const cachedPlaces = await Place.find(mongoQuery).sort({ lastSeenAt: -1 }).limit(50);
+    const newestCache = cachedPlaces[0]?.cachedAt ? new Date(cachedPlaces[0].cachedAt).getTime() : 0;
+    const cacheFresh = newestCache && (Date.now() - newestCache) < CACHE_STALE_MS;
+
+    if (cachedPlaces.length >= MIN_CACHE_RESULTS && cacheFresh) {
+      return res.json({ places: cachedPlaces, source: 'mongo-cache' });
+    }
 
     const provider = String(process.env.PLACES_PROVIDER || 'overpass').toLowerCase();
     if (provider === 'overpass') {
@@ -19,30 +88,18 @@ router.get('/nearby', async (req, res) => {
           radiusKm: radius,
           category: category || 'all',
         });
-        return res.json({ places, source: 'overpass' });
+        await upsertPlaces(places);
+        const refreshedPlaces = await Place.find(mongoQuery).sort({ lastSeenAt: -1 }).limit(50);
+        return res.json({
+          places: refreshedPlaces.length ? refreshedPlaces : places,
+          source: refreshedPlaces.length ? 'mongo-after-overpass' : 'overpass',
+        });
       } catch (err) {
         console.error('Overpass nearby search failed, falling back to Mongo:', err);
       }
     }
 
-    const query = {
-      location: {
-        $nearSphere: {
-          $geometry: {
-            type: 'Point',
-            coordinates: [parseFloat(lng), parseFloat(lat)],
-          },
-          $maxDistance: parseFloat(radius) * 1000,
-        },
-      },
-    };
-
-    if (category && category !== 'all') {
-      query.category = category;
-    }
-
-    const places = await Place.find(query).limit(50);
-    return res.json({ places, source: 'mongo' });
+    return res.json({ places: cachedPlaces, source: 'mongo-fallback' });
   } catch (err) {
     console.error(err);
     res.status(500).json({ msg: 'Server error' });

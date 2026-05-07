@@ -28,6 +28,7 @@ const PRICE_LEVELS = ['any', 'unknown', 'budget', 'moderate', 'premium'];
 
 type TravelMode = typeof TRAVEL_MODES[number];
 type AvailabilitySlot = { day: string; startTime: string; endTime: string };
+type SavedPlace = { placeId: string; status: 'saved' | 'visited' };
 type Recommendation = {
   placeId: string;
   name: string;
@@ -72,7 +73,7 @@ export default function PlanDetailScreen() {
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [preference, setPreference] = useState('');
+  const [preference, setPreference] = useState(user?.preferredSpotType ? user.preferredSpotType.charAt(0).toUpperCase() + user.preferredSpotType.slice(1) : '');
   const [travelMode, setTravelMode] = useState<TravelMode>('driving');
   const [availability, setAvailability] = useState<AvailabilitySlot>({
     day: 'Today',
@@ -90,6 +91,14 @@ export default function PlanDetailScreen() {
   const [minRating, setMinRating] = useState('0');
   const [priceLevel, setPriceLevel] = useState('any');
   const [openNowOnly, setOpenNowOnly] = useState(false);
+  const [savedPlaces, setSavedPlaces] = useState<SavedPlace[]>([]);
+
+  useEffect(() => {
+    if (user?.preferredSpotType) {
+      setPreference(user.preferredSpotType.charAt(0).toUpperCase() + user.preferredSpotType.slice(1));
+      setCategoryFilter(user.preferredSpotType);
+    }
+  }, [user?.preferredSpotType]);
 
   const fetchPlanDetails = React.useCallback(async () => {
     try {
@@ -109,6 +118,21 @@ export default function PlanDetailScreen() {
   useEffect(() => {
     fetchPlanDetails();
   }, [fetchPlanDetails]);
+
+  useEffect(() => {
+    const fetchSavedPlaces = async () => {
+      if (!user?.id) return;
+      try {
+        const res = await fetch(`${API_BASE}/places/saved?userId=${user.id}`);
+        const data = await res.json();
+        if (res.ok) setSavedPlaces(data.places || []);
+      } catch (err) {
+        console.error('Saved places fetch error:', err);
+      }
+    };
+
+    fetchSavedPlaces();
+  }, [user?.id]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -224,11 +248,12 @@ export default function PlanDetailScreen() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user?.id, place, status }),
       });
+      const data = await res.json();
       if (!res.ok) {
-        const data = await res.json();
         alert(data.msg || 'Could not save place');
         return;
       }
+      setSavedPlaces(data.places || []);
       alert(status === 'visited' ? 'Added to meeting history' : 'Saved to favorites');
     } catch (err) {
       console.error('Save place error:', err);
@@ -516,6 +541,7 @@ export default function PlanDetailScreen() {
           ) : recommendations.map((place, index) => {
             const hasVoted = place.votedBy?.some(voter => String(voter) === String(user?.id));
             const topTravel = place.travelTimes?.slice(0, 3) || [];
+            const savedState = savedPlaces.find((saved) => saved.placeId === place.placeId);
             return (
               <View key={place.placeId} style={s.card}>
                 <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
@@ -548,6 +574,11 @@ export default function PlanDetailScreen() {
                   <View style={s.badge}>
                     <Text style={s.badgeText}>{place.openNow === true ? 'Open' : 'Hours unknown'}</Text>
                   </View>
+                  {savedState ? (
+                    <View style={s.badge}>
+                      <Text style={s.badgeText}>{savedState.status === 'visited' ? 'Visited' : 'Saved'}</Text>
+                    </View>
+                  ) : null}
                 </View>
 
                 <View style={{ marginTop: 12 }}>
@@ -563,7 +594,7 @@ export default function PlanDetailScreen() {
                     <Text style={[s.chipText, hasVoted && s.chipTextActive]}>{hasVoted ? 'Voted' : 'Vote'}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity style={s.chip} onPress={() => handleSavePlace(place)}>
-                    <Text style={s.chipText}>Save</Text>
+                    <Text style={s.chipText}>{savedState?.status === 'visited' ? 'Visited' : savedState ? 'Saved' : 'Save'}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity style={s.chip} onPress={() => handleAddHistory(place)}>
                     <Text style={s.chipText}>Visited</Text>

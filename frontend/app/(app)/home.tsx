@@ -16,11 +16,12 @@ import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 import { s } from '../../tempStyles/HomeStyle';
 import { API_URL } from '@/lib/api';
+import { useAuth } from '@/context/AuthContext';
 
 const { width } = Dimensions.get('window');
 
 type Person = { id: number; name: string };
-type Category = 'all' | 'cafe' | 'restaurant' | 'park';
+type Category = 'all' | 'cafe' | 'restaurant' | 'park' | 'mall' | 'bar';
 type Coords = { latitude: number; longitude: number };
 type PlaceResult = {
   _id: string;
@@ -30,12 +31,18 @@ type PlaceResult = {
   location: { coordinates: [number, number] };
   vicinity?: string;
 };
+type SavedPlace = {
+  placeId: string;
+  status: 'saved' | 'visited';
+};
 
 const CATEGORY_LABELS: Record<Category, { label: string; icon: string }> = {
   all:        { label: 'All',        icon: 'apps' },
   cafe:       { label: 'Café',       icon: 'cafe' },
   restaurant: { label: 'Dine',       icon: 'restaurant' },
   park:       { label: 'Park',       icon: 'leaf' },
+  mall:       { label: 'Mall',       icon: 'storefront' },
+  bar:        { label: 'Bar',        icon: 'wine' },
 };
 
 const FETCH_RADIUS_KM = 5;
@@ -103,11 +110,12 @@ const AVATAR_COLORS = [
 
 // ── Component ──────────────────────────────────────────────────────
 export default function HomeScreen() {
+  const { user } = useAuth();
   const [people, setPeople] = useState<Person[]>([
     { id: 1, name: '' },
     { id: 2, name: '' },
   ]);
-  const [category, setCategory] = useState<Category>('all');
+  const [category, setCategory] = useState<Category>((user?.preferredSpotType as Category) || 'all');
   const [userCoords, setUserCoords] = useState<Coords | null>(null);
   const [midpoint, setMidpoint] = useState<Coords | null>(null);
   const [region, setRegion] = useState<Region>({
@@ -118,10 +126,17 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(false);
   const [locationError, setLocationError] = useState('');
   const [personMarkers, setPersonMarkers] = useState<{ id: number; name: string; coords: Coords }[]>([]);
+  const [savedPlaces, setSavedPlaces] = useState<SavedPlace[]>([]);
 
   const lastFetchCoords = useRef<Coords | null>(null);
   const isFetching = useRef(false);
   const mapRef = useRef<MapView>(null);
+
+  useEffect(() => {
+    if (user?.preferredSpotType) {
+      setCategory(user.preferredSpotType as Category);
+    }
+  }, [user?.preferredSpotType]);
 
   useEffect(() => {
     let sub: Location.LocationSubscription;
@@ -141,6 +156,21 @@ export default function HomeScreen() {
     })();
     return () => sub?.remove();
   }, []);
+
+  useEffect(() => {
+    const fetchSavedPlaces = async () => {
+      if (!user?.id) return;
+      try {
+        const res = await fetch(`${API_BASE}/places/saved?userId=${user.id}`);
+        const data = await res.json();
+        if (res.ok) setSavedPlaces(data.places || []);
+      } catch (err) {
+        console.error('Failed to fetch saved places:', err);
+      }
+    };
+
+    fetchSavedPlaces();
+  }, [user?.id]);
 
   const fetchPlaces = async (coords: Coords) => {
     if (isFetching.current) return;
@@ -195,6 +225,40 @@ export default function HomeScreen() {
   const updatePersonName = (id: number, text: string) => setPeople(people.map((p) => p.id === id ? { ...p, name: text } : p));
 
   const visiblePlaces = category === 'all' ? allPlaces : allPlaces.filter((p) => p.category === category);
+
+  const handleSavePlace = async (place: PlaceResult) => {
+    if (!user?.id) return;
+    try {
+      const payload = {
+        placeId: place._id,
+        name: place.name,
+        category: place.category,
+        rating: place.rating ?? null,
+        vicinity: place.vicinity,
+        location: {
+          latitude: place.location.coordinates[1],
+          longitude: place.location.coordinates[0],
+        },
+        links: {
+          maps: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place.name)}`,
+          zomato: `https://www.zomato.com/search?q=${encodeURIComponent(place.name)}`,
+          swiggy: `https://www.swiggy.com/search?query=${encodeURIComponent(place.name)}`,
+        },
+      };
+
+      const res = await fetch(`${API_BASE}/places/saved`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id, place: payload, status: 'saved' }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setSavedPlaces(data.places || []);
+      }
+    } catch (err) {
+      console.error('Failed to save place:', err);
+    }
+  };
 
   return (
     <SafeAreaView style={s.root}>
@@ -357,6 +421,9 @@ export default function HomeScreen() {
         {/* ── Category Section ── */}
         <View style={s.section}>
           <Text style={s.sectionLabel}>LOOKING FOR</Text>
+          {user?.preferredSpotType ? (
+            <Text style={[s.tagline, { marginBottom: 12 }]}>Default from settings: {user.preferredSpotType}</Text>
+          ) : null}
           <View style={s.catRow}>
             {(Object.entries(CATEGORY_LABELS) as [Category, { label: string; icon: string }][]).map(([cat, { label, icon }]) => {
               const active = category === cat;
@@ -428,9 +495,10 @@ export default function HomeScreen() {
         ) : (
           visiblePlaces.map((place, i) => {
             const catColors: Record<string, string> = {
-              cafe: C.amber, restaurant: C.red, park: C.green,
+              cafe: C.amber, restaurant: C.red, park: C.green, mall: C.accent, bar: C.red,
             };
             const dot = catColors[place.category] ?? C.accent;
+            const savedState = savedPlaces.find((saved) => saved.placeId === place._id);
             return (
               <TouchableOpacity key={place._id} style={s.placeCard} activeOpacity={0.8}>
                 {/* Index */}
@@ -451,9 +519,16 @@ export default function HomeScreen() {
                 </View>
 
                 {/* Rating */}
-                <View style={s.ratingBox}>
-                  <Ionicons name="star" size={11} color={C.amber} />
-                  <Text style={s.ratingVal}>{place.rating?.toFixed(1) ?? '—'}</Text>
+                <View style={{ alignItems: 'flex-end', gap: 8 }}>
+                  <View style={s.ratingBox}>
+                    <Ionicons name="star" size={11} color={C.amber} />
+                    <Text style={s.ratingVal}>{place.rating?.toFixed(1) ?? '—'}</Text>
+                  </View>
+                  <TouchableOpacity onPress={() => handleSavePlace(place)}>
+                    <Text style={[s.ratingVal, { color: savedState ? C.green : C.accent }]}>
+                      {savedState?.status === 'visited' ? 'Visited' : savedState ? 'Saved' : 'Save'}
+                    </Text>
+                  </TouchableOpacity>
                 </View>
 
                 <Ionicons name="chevron-forward" size={14} color={C.textMuted} style={{ marginLeft: 4 }} />

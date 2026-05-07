@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   View,
@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { s } from '../../tempStyles/SettingsStyle';
+import { API_URL } from '@/lib/api';
 
 // ── Palette (matches HomeScreen & SavedScreen) ────────────────────
 const C = {
@@ -37,10 +38,14 @@ const C = {
   white:     '#FFFFFF',
 };
 
-const SPOT_TYPES: { key: string; label: string; icon: string; color: string }[] = [
+type PreferredSpotType = 'all' | 'cafe' | 'restaurant' | 'park' | 'mall' | 'bar';
+
+const SPOT_TYPES: { key: PreferredSpotType; label: string; icon: string; color: string }[] = [
   { key: 'cafe',       label: 'Café',   icon: 'cafe',       color: C.amber },
   { key: 'restaurant', label: 'Dine',   icon: 'restaurant', color: C.red   },
   { key: 'park',       label: 'Park',   icon: 'leaf',       color: C.green },
+  { key: 'mall',       label: 'Mall',   icon: 'storefront', color: C.accent },
+  { key: 'bar',        label: 'Bar',    icon: 'wine',       color: C.red },
 ];
 
 const LEGAL_LINKS = [
@@ -49,17 +54,50 @@ const LEGAL_LINKS = [
   { label: 'Privacy Policy',    icon: 'shield-checkmark-outline' },
 ];
 
+const FAQS = [
+  { question: 'How are meeting spots chosen?', answer: 'We compare everyone\'s shared location, estimate a balanced meeting area, and rank nearby spots by travel fairness and convenience.' },
+  { question: 'Do all members need to share location?', answer: 'Yes for fairness-based suggestions. Without at least two shared locations, the app cannot generate midpoint and travel-balanced results.' },
+  { question: 'Can I save places for later?', answer: 'Yes. Save places from recommendations and they will appear in your Collections tab as saved or visited spots.' },
+  { question: 'Why do ratings sometimes show a dash?', answer: 'OpenStreetMap does not include crowd ratings for every place. When no free rating source is available, the app leaves it blank instead of guessing.' },
+];
+
+const TERMS = [
+  'Converge helps users coordinate meeting locations and place suggestions. It does not guarantee the availability, safety, or accuracy of any third-party place listing.',
+  'You are responsible for the information you share in plans, including locations, names, and availability windows.',
+  'Saved places, votes, and plan data may be used to improve your in-app recommendations.',
+  'External services such as Maps, Zomato, Swiggy, or OpenStreetMap are governed by their own terms and availability.',
+];
+
+const PRIVACY = [
+  'Location is only used to calculate group meeting suggestions and related travel fairness metrics.',
+  'Profile information such as name, username, email, and preferred spot type is stored to personalize the app experience.',
+  'Saved places and plan history are stored so they can be shown again across the Home, Plans, and Saved screens.',
+  'You should only invite users you know and only share location when you are comfortable doing so.',
+];
+
+const API_BASE = API_URL || 'https://sturdy-goggles-1033249426470.asia-south1.run.app';
+
 export default function SettingsScreen() {
   const { user, logout, updateUser } = useAuth();
 
   const [notifications,   setNotifications]   = useState(true);
   const [locationSharing, setLocationSharing] = useState(true);
-  const [preferredType,   setPreferredType]   = useState('cafe');
+  const [preferredType,   setPreferredType]   = useState<PreferredSpotType>((user?.preferredSpotType as PreferredSpotType) || 'cafe');
 
   const [modalVisible, setModalVisible] = useState(false);
   const [editName,  setEditName]  = useState(user?.name  || '');
   const [editEmail, setEditEmail] = useState(user?.email || '');
+  const [editUsername, setEditUsername] = useState(user?.username || '');
   const [isUpdating, setIsUpdating] = useState(false);
+  const [isSavingPreference, setIsSavingPreference] = useState(false);
+  const [legalModal, setLegalModal] = useState<'Help Center' | 'Terms of Service' | 'Privacy Policy' | null>(null);
+
+  useEffect(() => {
+    setEditName(user?.name || '');
+    setEditEmail(user?.email || '');
+    setEditUsername(user?.username || '');
+      setPreferredType((user?.preferredSpotType as PreferredSpotType) || 'cafe');
+  }, [user]);
 
   const handleLogout = async () => {
     await logout();
@@ -71,11 +109,12 @@ export default function SettingsScreen() {
     let hasChanges = false;
     if (editName  !== user?.name)  { updateData.name  = editName;  hasChanges = true; }
     if (editEmail !== user?.email) { updateData.email = editEmail; hasChanges = true; }
+    if (editUsername !== (user?.username || '')) { updateData.username = editUsername; hasChanges = true; }
     if (!hasChanges) { setModalVisible(false); return; }
 
     setIsUpdating(true);
     try {
-      const res = await fetch('https://sturdy-goggles-1033249426470.asia-south1.run.app/Auth/update', {
+      const res = await fetch(`${API_BASE}/Auth/update`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updateData),
@@ -93,6 +132,30 @@ export default function SettingsScreen() {
       alert('Network error. Please check your connection.');
     } finally {
       setIsUpdating(false);
+    }
+  };
+
+  const handlePreferredSpotChange = async (spotType: PreferredSpotType) => {
+    setPreferredType(spotType);
+    if (!user?.id) return;
+
+    setIsSavingPreference(true);
+    try {
+      const res = await fetch(`${API_BASE}/Auth/update`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: user.id, preferredSpotType: spotType }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        await updateUser(data.user);
+      } else {
+        alert(data.msg || 'Failed to save preferred spot');
+      }
+    } catch (err) {
+      alert('Could not save preferred spot right now.');
+    } finally {
+      setIsSavingPreference(false);
     }
   };
 
@@ -131,6 +194,7 @@ export default function SettingsScreen() {
           <View style={s.profileInfo}>
             <Text style={s.profileName}>{user?.name  || 'Guest User'}</Text>
             <Text style={s.profileEmail}>{user?.email || 'guest@example.com'}</Text>
+            {user?.username ? <Text style={s.profileEmail}>@{user.username}</Text> : null}
           </View>
           <TouchableOpacity
             style={s.editBtn}
@@ -203,7 +267,7 @@ export default function SettingsScreen() {
                           ? { backgroundColor: color, borderColor: color }
                           : { backgroundColor: color + '18', borderColor: color + '44' },
                       ]}
-                      onPress={() => setPreferredType(key)}
+                      onPress={() => handlePreferredSpotChange(key)}
                     >
                       <Ionicons
                         name={icon as any}
@@ -218,6 +282,7 @@ export default function SettingsScreen() {
                   );
                 })}
               </View>
+              {isSavingPreference ? <Text style={[s.settingHint, { marginTop: 10 }]}>Saving preference...</Text> : null}
             </View>
           </View>
         </View>
@@ -227,7 +292,7 @@ export default function SettingsScreen() {
         <View style={s.group}>
           {LEGAL_LINKS.map(({ label, icon }, i) => (
             <React.Fragment key={label}>
-              <TouchableOpacity style={s.linkRow} activeOpacity={0.7}>
+              <TouchableOpacity style={s.linkRow} activeOpacity={0.7} onPress={() => setLegalModal(label as 'Help Center' | 'Terms of Service' | 'Privacy Policy')}>
                 <View style={[s.settingIcon, { backgroundColor: C.accentSoft, borderColor: C.accent + '33' }]}>
                   <Ionicons name={icon as any} size={15} color={C.accent} />
                 </View>
@@ -289,6 +354,21 @@ export default function SettingsScreen() {
               />
             </View>
 
+            <Text style={[s.fieldLabel, { marginTop: 14 }]}>Username</Text>
+            <View style={s.fieldWrap}>
+              <Ionicons name="at-outline" size={16} color={C.textMuted} style={{ marginRight: 10 }} />
+              <TextInput
+                value={editUsername}
+                onChangeText={setEditUsername}
+                style={s.fieldInput}
+                placeholderTextColor={C.textMuted}
+                placeholder="unique username"
+                autoCapitalize="none"
+                autoCorrect={false}
+                selectionColor={C.accent}
+              />
+            </View>
+
             {/* Email field */}
             <Text style={[s.fieldLabel, { marginTop: 14 }]}>Email Address</Text>
             <View style={s.fieldWrap}>
@@ -324,6 +404,49 @@ export default function SettingsScreen() {
                 }
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={!!legalModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setLegalModal(null)}
+      >
+        <View style={s.modalBackdrop}>
+          <View style={s.modalSheet}>
+            <View style={s.modalHandle} />
+            <View style={s.modalHeader}>
+              <Text style={s.modalTitle}>{legalModal}</Text>
+              <TouchableOpacity
+                style={s.modalCloseBtn}
+                onPress={() => setLegalModal(null)}
+              >
+                <Ionicons name="close" size={16} color={C.textSub} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {legalModal === 'Help Center' ? FAQS.map((item) => (
+                <View key={item.question} style={s.legalBlock}>
+                  <Text style={s.legalTitle}>{item.question}</Text>
+                  <Text style={s.legalBody}>{item.answer}</Text>
+                </View>
+              )) : null}
+
+              {legalModal === 'Terms of Service' ? TERMS.map((item) => (
+                <View key={item} style={s.legalBlock}>
+                  <Text style={s.legalBody}>{item}</Text>
+                </View>
+              )) : null}
+
+              {legalModal === 'Privacy Policy' ? PRIVACY.map((item) => (
+                <View key={item} style={s.legalBlock}>
+                  <Text style={s.legalBody}>{item}</Text>
+                </View>
+              )) : null}
+            </ScrollView>
           </View>
         </View>
       </Modal>

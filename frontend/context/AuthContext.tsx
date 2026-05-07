@@ -5,6 +5,8 @@ interface User {
   id: string;
   name: string;
   email: string;
+  username?: string;
+  preferredSpotType?: 'all' | 'cafe' | 'restaurant' | 'park' | 'mall' | 'bar';
 }
 
 interface AuthContextType {

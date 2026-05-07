@@ -114,6 +114,11 @@ const userSchema = new mongoose.Schema({
         default: Date.now,
       },
     }],
+    preferredSpotType: {
+      type: String,
+      enum: ['all', 'cafe', 'restaurant', 'park', 'mall', 'bar'],
+      default: 'cafe',
+    },
 },{
     timestamps: true
 });

@@ -54,7 +54,9 @@ router.post('/login', async (req, res) => {
     res.status(200).json({ msg: 'Login successful', user: {
       id: user._id,
       name: user.name,
-      email: user.email
+      email: user.email,
+      username: user.username,
+      preferredSpotType: user.preferredSpotType || 'cafe',
     }});
   } catch (err) {
     console.error(err);
@@ -64,7 +66,7 @@ router.post('/login', async (req, res) => {
 
 router.put('/update', async (req, res) => {
   try {
-    const { id, name, email } = req.body;
+    const { id, name, email, username, preferredSpotType } = req.body;
     if (!id) return res.status(400).json({ msg: 'User ID required' });
     
     // Check if email is already taken by another user
@@ -73,16 +75,33 @@ router.put('/update', async (req, res) => {
       if (emailExists) return res.status(400).json({ msg: 'Email already in use' });
     }
 
+    if (username) {
+      const normalizedUsername = String(username).trim().toLowerCase();
+      if (normalizedUsername.length < 3) {
+        return res.status(400).json({ msg: 'Username must be at least 3 characters' });
+      }
+      const usernameExists = await User.findOne({ username: normalizedUsername, _id: { $ne: id } });
+      if (usernameExists) return res.status(400).json({ msg: 'Username already in use' });
+    }
+
     const user = await User.findById(id);
     if (!user) return res.status(404).json({ msg: 'User not found' });
 
     if (name) user.name = name;
     if (email) user.email = email;
+    if (username) user.username = String(username).trim().toLowerCase();
+    if (preferredSpotType) user.preferredSpotType = preferredSpotType;
 
     await user.save();
     res.status(200).json({ 
       msg: 'Profile updated', 
-      user: { id: user._id, name: user.name, email: user.email } 
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        username: user.username,
+        preferredSpotType: user.preferredSpotType || 'cafe',
+      }
     });
   } catch (err) {
     console.error(err);

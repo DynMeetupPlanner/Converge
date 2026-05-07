@@ -177,6 +177,7 @@ export const s = StyleSheet.create({
   // Spot chips
   spotRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 8,
     marginTop: 12,
   },
@@ -339,5 +340,24 @@ export const s = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: C.white,
+  },
+  legalBlock: {
+    backgroundColor: C.card,
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 12,
+  },
+  legalTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: C.text,
+    marginBottom: 6,
+  },
+  legalBody: {
+    fontSize: 13,
+    lineHeight: 19,
+    color: C.textSub,
   },
 });
