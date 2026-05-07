@@ -7,7 +7,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
-  
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -51,6 +51,36 @@ export default function MyPlansScreen() {
     fetchPlans();
   };
 
+  const handleDeletePlan = (planId: string) => {
+    Alert.alert(
+      'Delete plan',
+      'This will remove the plan for all members. Do you want to continue?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const res = await fetch(`${API_BASE}/plans/${planId}?userId=${user?.id}`, {
+                method: 'DELETE',
+              });
+              const data = await res.json();
+              if (!res.ok) {
+                alert(data.msg || 'Could not delete plan');
+                return;
+              }
+              setPlans(plans.filter((plan) => plan._id !== planId));
+            } catch (error) {
+              console.error('Delete plan failed:', error);
+              alert('Could not delete plan right now');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   return (
     <SafeAreaView style={s.root}>
       <ScrollView
@@ -69,7 +99,7 @@ export default function MyPlansScreen() {
           </View>
           <View style={s.countChip}>
             <Text style={s.countChipText}>{plans.length}</Text>
-            <Text style={s.countChipLabel}>active</Text>
+            <Text style={s.countChipLabel}> active</Text>
           </View>
         </View>
 
@@ -160,13 +190,22 @@ export default function MyPlansScreen() {
               </View>
 
               {/* Right side (Status) */}
-              <View style={{ alignItems: 'flex-end' }}>
+              <View style={{ alignItems: 'flex-end', gap: 10 }}>
                 {plan.midpoint && (
                   <View style={[s.badge, { backgroundColor: C.greenSoft, borderColor: C.green + '44' }]}>
                     <Ionicons name="checkmark" size={10} color={C.green} />
                     <Text style={[s.badgeText, { color: C.green }]}>Ready</Text>
                   </View>
                 )}
+                {String(plan.creatorId) === String(user?.id) ? (
+                  <TouchableOpacity
+                    style={[s.badge, { backgroundColor: C.redSoft, borderColor: C.red + '44' }]}
+                    onPress={() => handleDeletePlan(plan._id)}
+                  >
+                    <Ionicons name="trash-outline" size={10} color={C.red} />
+                    <Text style={[s.badgeText, { color: C.red }]}>Delete</Text>
+                  </TouchableOpacity>
+                ) : null}
               </View>
 
               <Ionicons name="chevron-forward" size={14} color={C.textMuted} style={{ marginLeft: 4 }} />

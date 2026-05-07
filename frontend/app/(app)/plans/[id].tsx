@@ -73,7 +73,7 @@ export default function PlanDetailScreen() {
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [preference, setPreference] = useState(user?.preferredSpotType ? user.preferredSpotType.charAt(0).toUpperCase() + user.preferredSpotType.slice(1) : '');
+  const [preference, setPreference] = useState('');
   const [travelMode, setTravelMode] = useState<TravelMode>('driving');
   const [availability, setAvailability] = useState<AvailabilitySlot>({
     day: 'Today',
@@ -92,13 +92,19 @@ export default function PlanDetailScreen() {
   const [priceLevel, setPriceLevel] = useState('any');
   const [openNowOnly, setOpenNowOnly] = useState(false);
   const [savedPlaces, setSavedPlaces] = useState<SavedPlace[]>([]);
+  const [hasChosenPreference, setHasChosenPreference] = useState(false);
+  const [hasChosenCategoryFilter, setHasChosenCategoryFilter] = useState(false);
 
   useEffect(() => {
     if (user?.preferredSpotType) {
-      setPreference(user.preferredSpotType.charAt(0).toUpperCase() + user.preferredSpotType.slice(1));
-      setCategoryFilter(user.preferredSpotType);
+      if (!hasChosenPreference) {
+        setPreference(user.preferredSpotType.charAt(0).toUpperCase() + user.preferredSpotType.slice(1));
+      }
+      if (!hasChosenCategoryFilter) {
+        setCategoryFilter(user.preferredSpotType);
+      }
     }
-  }, [user?.preferredSpotType]);
+  }, [hasChosenCategoryFilter, hasChosenPreference, user?.preferredSpotType]);
 
   const fetchPlanDetails = React.useCallback(async () => {
     try {
@@ -390,7 +396,10 @@ export default function PlanDetailScreen() {
                 <TouchableOpacity
                   key={p}
                   style={[s.chip, preference === p && s.chipActive]}
-                  onPress={() => setPreference(p)}
+                  onPress={() => {
+                    setHasChosenPreference(true);
+                    setPreference(p);
+                  }}
                 >
                   <Text style={[s.chipText, preference === p && s.chipTextActive]}>{p}</Text>
                 </TouchableOpacity>
@@ -478,7 +487,10 @@ export default function PlanDetailScreen() {
                 <TouchableOpacity
                   key={cat}
                   style={[s.chip, categoryFilter === cat && s.chipActive]}
-                  onPress={() => setCategoryFilter(cat)}
+                  onPress={() => {
+                    setHasChosenCategoryFilter(true);
+                    setCategoryFilter(cat);
+                  }}
                 >
                   <Text style={[s.chipText, categoryFilter === cat && s.chipTextActive]}>{cat}</Text>
                 </TouchableOpacity>

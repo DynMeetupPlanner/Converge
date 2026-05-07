@@ -115,7 +115,7 @@ export default function HomeScreen() {
     { id: 1, name: '' },
     { id: 2, name: '' },
   ]);
-  const [category, setCategory] = useState<Category>((user?.preferredSpotType as Category) || 'all');
+  const [category, setCategory] = useState<Category>('all');
   const [userCoords, setUserCoords] = useState<Coords | null>(null);
   const [midpoint, setMidpoint] = useState<Coords | null>(null);
   const [region, setRegion] = useState<Region>({
@@ -127,16 +127,17 @@ export default function HomeScreen() {
   const [locationError, setLocationError] = useState('');
   const [personMarkers, setPersonMarkers] = useState<{ id: number; name: string; coords: Coords }[]>([]);
   const [savedPlaces, setSavedPlaces] = useState<SavedPlace[]>([]);
+  const [hasChosenCategory, setHasChosenCategory] = useState(false);
 
   const lastFetchCoords = useRef<Coords | null>(null);
   const isFetching = useRef(false);
   const mapRef = useRef<MapView>(null);
 
   useEffect(() => {
-    if (user?.preferredSpotType) {
+    if (user?.preferredSpotType && !hasChosenCategory) {
       setCategory(user.preferredSpotType as Category);
     }
-  }, [user?.preferredSpotType]);
+  }, [hasChosenCategory, user?.preferredSpotType]);
 
   useEffect(() => {
     let sub: Location.LocationSubscription;
@@ -431,7 +432,10 @@ export default function HomeScreen() {
                 <TouchableOpacity
                   key={cat}
                   style={[s.catBtn, active && s.catBtnActive]}
-                  onPress={() => setCategory(cat)}
+                  onPress={() => {
+                    setHasChosenCategory(true);
+                    setCategory(cat);
+                  }}
                 >
                   <Ionicons
                     name={icon as any}
