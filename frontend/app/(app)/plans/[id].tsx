@@ -90,9 +90,6 @@ export default function PlanDetailScreen() {
   const [minRating, setMinRating] = useState('0');
   const [priceLevel, setPriceLevel] = useState('any');
   const [openNowOnly, setOpenNowOnly] = useState(false);
-  const [planDebug, setPlanDebug] = useState<Record<string, unknown> | null>(null);
-
-  const debugText = (value: unknown) => JSON.stringify(value, null, 2);
 
   const fetchPlanDetails = React.useCallback(async () => {
     try {
@@ -100,25 +97,9 @@ export default function PlanDetailScreen() {
       const data = await res.json();
       if (res.ok) {
         setCurrentPlan(data.plan);
-        setPlanDebug({
-          apiBase: API_BASE,
-          responseStatus: res.status,
-          backendDebug: data.debug || null,
-        });
-      } else {
-        setPlanDebug({
-          apiBase: API_BASE,
-          responseStatus: res.status,
-          backendDebug: data.debug || null,
-          message: data.msg || 'Failed to load plan',
-        });
       }
     } catch (err) {
       console.error('Fetch plan error:', err);
-      setPlanDebug({
-        apiBase: API_BASE,
-        networkError: err instanceof Error ? err.message : String(err),
-      });
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -641,16 +622,6 @@ export default function PlanDetailScreen() {
               )}
             </View>
           ))}
-        </View>
-
-        <View style={[s.card, { marginTop: 18, backgroundColor: C.surface }]}>
-          <Text style={s.sectionTitle}>Plan Debug</Text>
-          <Text style={s.metaText}>Backend: {API_BASE}</Text>
-          <Text style={s.metaText}>Current user: {user?.id || 'unknown'}</Text>
-          <Text style={s.metaText}>Plan ID: {String(planId)}</Text>
-          <Text selectable style={[s.metaText, { fontFamily: 'monospace', marginTop: 8 }]}>
-            {debugText(planDebug)}
-          </Text>
         </View>
       </ScrollView>
     </SafeAreaView>

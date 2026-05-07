@@ -11,12 +11,6 @@ import {
 
 const router = express.Router();
 
-function formatError(error) {
-  if (!error) return 'Unknown error';
-  if (error instanceof Error) return error.message;
-  return String(error);
-}
-
 // Create a new plan
 router.post('/', async (req, res) => {
   try {
@@ -72,27 +66,10 @@ router.get('/:id', async (req, res) => {
   try {
     const plan = await Plan.findById(req.params.id);
     if (!plan) return res.status(404).json({ msg: 'Plan not found' });
-    res.json({
-      plan,
-      debug: {
-        route: 'GET /plans/:id',
-        planId: req.params.id,
-        memberCount: plan.members.length,
-        memberIds: plan.members.map((member) => String(member.userId)),
-        serverTime: new Date().toISOString(),
-      }
-    });
+    res.json({ plan });
   } catch (err) {
     console.error(err);
-    res.status(500).json({
-      msg: 'Server error',
-      debug: {
-        route: 'GET /plans/:id',
-        planId: req.params.id,
-        error: formatError(err),
-        serverTime: new Date().toISOString(),
-      }
-    });
+    res.status(500).json({ msg: 'Server error' });
   }
 });
 
@@ -228,71 +205,22 @@ router.post('/:id/invite', async (req, res) => {
   try {
     const { userId, userIds } = req.body;
     const idsToInvite = Array.isArray(userIds) ? userIds : [userId].filter(Boolean);
-    const debug = {
-      route: 'POST /plans/:id/invite',
-      planId: req.params.id,
-      rawBody: req.body,
-      normalizedIdsToInvite: idsToInvite,
-      serverTime: new Date().toISOString(),
-    };
-
-    console.log('[plans/invite] incoming:', debug);
 
     if (idsToInvite.length === 0) {
-      return res.status(400).json({
-        msg: 'At least one userId is required',
-        debug: {
-          ...debug,
-          reason: 'empty_user_ids',
-        }
-      });
+      return res.status(400).json({ msg: 'At least one userId is required' });
     }
 
     const plan = await Plan.findById(req.params.id);
-    if (!plan) {
-      return res.status(404).json({
-        msg: 'Plan not found',
-        debug: {
-          ...debug,
-          reason: 'plan_not_found',
-        }
-      });
-    }
-    debug.existingMemberIds = plan.members.map((member) => member.userId.toString());
+    if (!plan) return res.status(404).json({ msg: 'Plan not found' });
 
     const users = await User.find({ _id: { $in: idsToInvite } }).select('name username email');
-    debug.foundUsers = users.map((user) => ({
-      id: user._id.toString(),
-      name: user.name,
-      username: user.username,
-      email: user.email,
-    }));
-
-    if (users.length === 0) {
-      return res.status(404).json({
-        msg: 'No users found',
-        debug: {
-          ...debug,
-          reason: 'no_matching_users',
-        }
-      });
-    }
+    if (users.length === 0) return res.status(404).json({ msg: 'No users found' });
 
     const existingMemberIds = new Set(plan.members.map(m => m.userId.toString()));
     const newUsers = users.filter(user => !existingMemberIds.has(user._id.toString()));
-    debug.newUsers = newUsers.map((user) => ({
-      id: user._id.toString(),
-      name: user.name,
-    }));
 
     if (newUsers.length === 0) {
-      return res.status(400).json({
-        msg: 'Selected users are already in this plan',
-        debug: {
-          ...debug,
-          reason: 'all_users_already_present',
-        }
-      });
+      return res.status(400).json({ msg: 'Selected users are already in this plan' });
     }
 
     newUsers.forEach(user => {
@@ -303,22 +231,10 @@ router.post('/:id/invite', async (req, res) => {
     });
 
     await plan.save();
-    debug.finalMemberIds = plan.members.map((member) => member.userId.toString());
-    debug.invitedCount = newUsers.length;
-    console.log('[plans/invite] success:', debug);
-    res.json({ msg: 'Users invited', invitedCount: newUsers.length, plan, debug });
+    res.json({ msg: 'Users invited', invitedCount: newUsers.length, plan });
   } catch (err) {
     console.error(err);
-    res.status(500).json({
-      msg: 'Server error',
-      debug: {
-        route: 'POST /plans/:id/invite',
-        planId: req.params.id,
-        rawBody: req.body,
-        error: formatError(err),
-        serverTime: new Date().toISOString(),
-      }
-    });
+    res.status(500).json({ msg: 'Server error' });
   }
 });
 
