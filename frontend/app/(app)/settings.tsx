@@ -58,7 +58,7 @@ const FAQS = [
   { question: 'How are meeting spots chosen?', answer: 'We compare everyone\'s shared location, estimate a balanced meeting area, and rank nearby spots by travel fairness and convenience.' },
   { question: 'Do all members need to share location?', answer: 'Yes for fairness-based suggestions. Without at least two shared locations, the app cannot generate midpoint and travel-balanced results.' },
   { question: 'Can I save places for later?', answer: 'Yes. Save places from recommendations and they will appear in your Collections tab as saved or visited spots.' },
-  { question: 'Why do ratings sometimes show a dash?', answer: 'OpenStreetMap does not include crowd ratings for every place. When no free rating source is available, the app leaves it blank instead of guessing.' },
+  { question: 'Why do place results not show ratings?', answer: 'The free OpenStreetMap data source does not provide reliable crowd ratings, so the app focuses on category, location, saved status, and fairness instead.' },
 ];
 
 const TERMS = [

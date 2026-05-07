@@ -244,12 +244,6 @@ export default function SavedScreen() {
 
                 {/* Right side */}
                 <View style={s.cardRight}>
-                  {/* Rating */}
-                  <View style={s.ratingBox}>
-                    <Ionicons name="star" size={10} color={C.amber} />
-                    <Text style={s.ratingVal}>{item.rating ? item.rating.toFixed(1) : '—'}</Text>
-                  </View>
-
                   {/* Status pill */}
                   <TouchableOpacity style={[
                     s.statusPill,

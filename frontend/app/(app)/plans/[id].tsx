@@ -88,7 +88,6 @@ export default function PlanDetailScreen() {
   const [recommendationLoading, setRecommendationLoading] = useState(false);
   const [recommendationNote, setRecommendationNote] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
-  const [minRating, setMinRating] = useState('0');
   const [priceLevel, setPriceLevel] = useState('any');
   const [openNowOnly, setOpenNowOnly] = useState(false);
   const [savedPlaces, setSavedPlaces] = useState<SavedPlace[]>([]);
@@ -198,7 +197,7 @@ export default function PlanDetailScreen() {
       const params = new URLSearchParams({
         category: categoryFilter,
         radius: '5',
-        minRating,
+        minRating: '0',
         priceLevel,
         openNow: String(openNowOnly),
         travelMode,
@@ -219,7 +218,7 @@ export default function PlanDetailScreen() {
     } finally {
       setRecommendationLoading(false);
     }
-  }, [categoryFilter, currentPlan?.members, minRating, openNowOnly, planId, priceLevel, travelMode]);
+  }, [categoryFilter, currentPlan?.members, openNowOnly, planId, priceLevel, travelMode]);
 
   useEffect(() => {
     if ((currentPlan?.members?.filter(m => m.location).length || 0) >= 2) {
@@ -511,14 +510,6 @@ export default function PlanDetailScreen() {
             </View>
 
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              <TextInput
-                style={[s.inputWrap, { flex: 1, height: 46, marginBottom: 0, color: C.text }]}
-                placeholder="Min rating"
-                placeholderTextColor={C.textMuted}
-                keyboardType="decimal-pad"
-                value={minRating}
-                onChangeText={setMinRating}
-              />
               <TouchableOpacity
                 style={[s.chip, openNowOnly && s.chipActive, { marginBottom: 0 }]}
                 onPress={() => setOpenNowOnly(!openNowOnly)}
@@ -566,10 +557,6 @@ export default function PlanDetailScreen() {
                       {place.category} · {place.vicinity || 'near meeting zone'}
                     </Text>
                     <Text style={[s.metaText, { marginTop: 6 }]}>{place.reason}</Text>
-                  </View>
-                  <View style={s.ratingBox}>
-                    <Ionicons name="star" size={11} color={C.amber} />
-                    <Text style={s.ratingVal}>{place.rating ? place.rating.toFixed(1) : '—'}</Text>
                   </View>
                 </View>
 

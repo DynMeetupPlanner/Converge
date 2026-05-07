@@ -437,20 +437,20 @@ export const s = StyleSheet.create({
     color: C.textMuted,
     flex: 1,
   },
-  ratingBox: {
+  savePill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
-    backgroundColor: 'rgba(255,193,77,0.12)',
+    gap: 4,
+    backgroundColor: C.accentSoft,
     borderRadius: 8,
     paddingHorizontal: 8,
     paddingVertical: 5,
     borderWidth: 1,
-    borderColor: 'rgba(255,193,77,0.25)',
+    borderColor: C.accent + '44',
   },
-  ratingVal: {
+  savePillText: {
     fontSize: 12,
     fontWeight: '700',
-    color: C.amber,
+    color: C.accent,
   },
 });

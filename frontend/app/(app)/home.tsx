@@ -130,7 +130,9 @@ export default function HomeScreen() {
   const [hasChosenCategory, setHasChosenCategory] = useState(false);
 
   const lastFetchCoords = useRef<Coords | null>(null);
+  const lastFetchCategory = useRef<Category | null>(null);
   const isFetching = useRef(false);
+  const fetchRequestId = useRef(0);
   const mapRef = useRef<MapView>(null);
 
   useEffect(() => {
@@ -173,22 +175,33 @@ export default function HomeScreen() {
     fetchSavedPlaces();
   }, [user?.id]);
 
-  const fetchPlaces = async (coords: Coords) => {
-    if (isFetching.current) return;
+  const fetchPlaces = async (coords: Coords, selectedCategory: Category = category) => {
+    const requestId = fetchRequestId.current + 1;
+    fetchRequestId.current = requestId;
     isFetching.current = true;
     lastFetchCoords.current = coords;
+    lastFetchCategory.current = selectedCategory;
     try {
       const res = await fetch(
-        `${API_BASE}/places/nearby?lat=${coords.latitude}&lng=${coords.longitude}&radius=${FETCH_RADIUS_KM}&category=${encodeURIComponent(category)}`
+        `${API_BASE}/places/nearby?lat=${coords.latitude}&lng=${coords.longitude}&radius=${FETCH_RADIUS_KM}&category=${encodeURIComponent(selectedCategory)}`
       );
       const data = await res.json();
-      setAllPlaces(data.places ?? []);
+      if (requestId === fetchRequestId.current) {
+        setAllPlaces(data.places ?? []);
+      }
     } catch (e) {
       console.error('Failed to fetch places:', e);
     } finally {
-      isFetching.current = false;
+      if (requestId === fetchRequestId.current) {
+        isFetching.current = false;
+      }
     }
   };
+
+  useEffect(() => {
+    if (!midpoint || lastFetchCategory.current === category) return;
+    fetchPlaces(midpoint, category);
+  }, [category, midpoint]);
 
   const handleSearch = async () => {
     setLoading(true);
@@ -215,7 +228,7 @@ export default function HomeScreen() {
       setMidpoint(mid);
       mapRef.current?.animateToRegion({ ...mid, latitudeDelta: 0.05, longitudeDelta: 0.05 }, 800);
       const shouldFetch = !lastFetchCoords.current || haversine(lastFetchCoords.current, mid) >= REFETCH_THRESHOLD_KM;
-      if (shouldFetch) await fetchPlaces(mid);
+      if (shouldFetch || lastFetchCategory.current !== category) await fetchPlaces(mid, category);
     } finally {
       setLoading(false);
     }
@@ -314,7 +327,7 @@ export default function HomeScreen() {
                   longitude: place.location.coordinates[0],
                 }}
                 title={place.name}
-                description={`${place.category}${place.rating ? ` · ★ ${place.rating}` : ''}`}
+                description={place.category}
                 pinColor={C.green}
               />
             ))}
@@ -522,14 +535,20 @@ export default function HomeScreen() {
                   </View>
                 </View>
 
-                {/* Rating */}
                 <View style={{ alignItems: 'flex-end', gap: 8 }}>
-                  <View style={s.ratingBox}>
-                    <Ionicons name="star" size={11} color={C.amber} />
-                    <Text style={s.ratingVal}>{place.rating?.toFixed(1) ?? '—'}</Text>
-                  </View>
-                  <TouchableOpacity onPress={() => handleSavePlace(place)}>
-                    <Text style={[s.ratingVal, { color: savedState ? C.green : C.accent }]}>
+                  <TouchableOpacity
+                    style={[
+                      s.savePill,
+                      savedState && { backgroundColor: C.greenSoft, borderColor: C.green + '44' },
+                    ]}
+                    onPress={() => handleSavePlace(place)}
+                  >
+                    <Ionicons
+                      name={savedState ? 'bookmark' : 'bookmark-outline'}
+                      size={12}
+                      color={savedState ? C.green : C.accent}
+                    />
+                    <Text style={[s.savePillText, { color: savedState ? C.green : C.accent }]}>
                       {savedState?.status === 'visited' ? 'Visited' : savedState ? 'Saved' : 'Save'}
                     </Text>
                   </TouchableOpacity>
