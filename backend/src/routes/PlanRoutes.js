@@ -73,6 +73,26 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+router.delete('/:id', async (req, res) => {
+  try {
+    const { userId } = req.query;
+    if (!userId) return res.status(400).json({ msg: 'UserId required' });
+
+    const plan = await Plan.findById(req.params.id);
+    if (!plan) return res.status(404).json({ msg: 'Plan not found' });
+
+    if (String(plan.creatorId) !== String(userId)) {
+      return res.status(403).json({ msg: 'Only the plan creator can delete this plan' });
+    }
+
+    await Plan.findByIdAndDelete(req.params.id);
+    res.json({ msg: 'Plan deleted' });
+  } catch (err) {
+    console.error('Delete plan error:', err);
+    res.status(500).json({ msg: 'Server error' });
+  }
+});
+
 // Update member location and preference
 router.post('/:id/location', async (req, res) => {
   try {
