@@ -1,15 +1,13 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
-  ScrollView,  
+  ScrollView,
   ActivityIndicator,
-  StyleSheet,
-  Dimensions,
-  Platform,
+  Linking,
 } from 'react-native';
 import MapView, { Marker, Circle, Region } from 'react-native-maps';
 import * as Location from 'expo-location';
@@ -17,8 +15,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { s } from '../../tempStyles/HomeStyle';
 import { API_URL } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
-
-const { width } = Dimensions.get('window');
 
 type Person = { id: number; name: string };
 type Category = 'all' | 'cafe' | 'restaurant' | 'park' | 'mall' | 'bar';
@@ -35,6 +31,23 @@ type SavedPlace = {
   placeId: string;
   status: 'saved' | 'visited';
 };
+type TravelEstimate = {
+  personId: number;
+  name: string;
+  distanceKm: number;
+  durationMinutes: number;
+};
+type RankedPlace = PlaceResult & {
+  fairnessScore: number;
+  travelStats: {
+    averageMinutes: number;
+    maxMinutes: number;
+    minMinutes: number;
+    spreadMinutes: number;
+  };
+  travelTimes: TravelEstimate[];
+  reason: string;
+};
 
 const CATEGORY_LABELS: Record<Category, { label: string; icon: string }> = {
   all:        { label: 'All',        icon: 'apps' },
@@ -47,6 +60,9 @@ const CATEGORY_LABELS: Record<Category, { label: string; icon: string }> = {
 
 const FETCH_RADIUS_KM = 5;
 const REFETCH_THRESHOLD_KM = 2;
+const TOP_PLACE_LIMIT = 7;
+const DRIVING_SPEED_KMPH = 28;
+const ROAD_FACTOR = 1.35;
 const API_BASE = API_URL || 'https://sturdy-goggles-1033249426470.asia-south1.run.app';
 
 // Palette
@@ -90,6 +106,76 @@ function calcMidpoint(coords: Coords[]): Coords {
   };
 }
 
+function getPlaceCoords(place: PlaceResult): Coords {
+  return {
+    latitude: place.location.coordinates[1],
+    longitude: place.location.coordinates[0],
+  };
+}
+
+function estimateTravelToPlace(marker: { id: number; name: string; coords: Coords }, placeCoords: Coords): TravelEstimate {
+  const distanceKm = haversine(marker.coords, placeCoords) * ROAD_FACTOR;
+  return {
+    personId: marker.id,
+    name: marker.name || 'Your Location',
+    distanceKm: Number(distanceKm.toFixed(2)),
+    durationMinutes: Math.max(1, Math.round((distanceKm / DRIVING_SPEED_KMPH) * 60)),
+  };
+}
+
+function getFairnessScore(travelTimes: TravelEstimate[]): number {
+  if (!travelTimes.length) return 0;
+  const durations = travelTimes.map((item) => item.durationMinutes);
+  const max = Math.max(...durations);
+  const min = Math.min(...durations);
+  const avg = durations.reduce((sum, value) => sum + value, 0) / durations.length;
+  const spread = max - min;
+  const balancePenalty = avg > 0 ? (spread / avg) * 42 : 0;
+  const burdenPenalty = Math.max(0, max - 45) * 0.6;
+  return Math.max(0, Math.min(100, Math.round(100 - balancePenalty - burdenPenalty)));
+}
+
+function rankPlacesByFairness(places: PlaceResult[], markers: { id: number; name: string; coords: Coords }[]): RankedPlace[] {
+  if (markers.length < 2) {
+    return places.slice(0, TOP_PLACE_LIMIT).map((place) => ({
+      ...place,
+      fairnessScore: 0,
+      travelStats: { averageMinutes: 0, maxMinutes: 0, minMinutes: 0, spreadMinutes: 0 },
+      travelTimes: [],
+      reason: 'Add at least two locations to calculate fairness.',
+    }));
+  }
+
+  return places
+    .map((place) => {
+      const placeCoords = getPlaceCoords(place);
+      const travelTimes = markers.map((marker) => estimateTravelToPlace(marker, placeCoords));
+      const durations = travelTimes.map((item) => item.durationMinutes);
+      const averageMinutes = durations.reduce((sum, value) => sum + value, 0) / durations.length;
+      const maxMinutes = Math.max(...durations);
+      const minMinutes = Math.min(...durations);
+      const fairnessScore = getFairnessScore(travelTimes);
+
+      return {
+        ...place,
+        fairnessScore,
+        travelStats: {
+          averageMinutes: Number(averageMinutes.toFixed(1)),
+          maxMinutes,
+          minMinutes,
+          spreadMinutes: maxMinutes - minMinutes,
+        },
+        travelTimes,
+        reason: `Fairness ${fairnessScore}/100, average travel ${Math.round(averageMinutes)} min, longest travel ${maxMinutes} min.`,
+      };
+    })
+    .sort((a, b) => {
+      if (b.fairnessScore !== a.fairnessScore) return b.fairnessScore - a.fairnessScore;
+      return a.travelStats.averageMinutes - b.travelStats.averageMinutes;
+    })
+    .slice(0, TOP_PLACE_LIMIT);
+}
+
 async function geocode(address: string): Promise<Coords | null> {
   try {
     const results = await Location.geocodeAsync(address);
@@ -128,6 +214,7 @@ export default function HomeScreen() {
   const [personMarkers, setPersonMarkers] = useState<{ id: number; name: string; coords: Coords }[]>([]);
   const [savedPlaces, setSavedPlaces] = useState<SavedPlace[]>([]);
   const [hasChosenCategory, setHasChosenCategory] = useState(false);
+  const [expandedPlaceId, setExpandedPlaceId] = useState<string | null>(null);
 
   const lastFetchCoords = useRef<Coords | null>(null);
   const lastFetchCategory = useRef<Category | null>(null);
@@ -239,6 +326,14 @@ export default function HomeScreen() {
   const updatePersonName = (id: number, text: string) => setPeople(people.map((p) => p.id === id ? { ...p, name: text } : p));
 
   const visiblePlaces = category === 'all' ? allPlaces : allPlaces.filter((p) => p.category === category);
+  const rankedPlaces = useMemo(
+    () => rankPlacesByFairness(visiblePlaces, personMarkers),
+    [personMarkers, visiblePlaces]
+  );
+
+  useEffect(() => {
+    setExpandedPlaceId(null);
+  }, [category, midpoint]);
 
   const handleSavePlace = async (place: PlaceResult) => {
     if (!user?.id) return;
@@ -250,8 +345,8 @@ export default function HomeScreen() {
         rating: place.rating ?? null,
         vicinity: place.vicinity,
         location: {
-          latitude: place.location.coordinates[1],
-          longitude: place.location.coordinates[0],
+          latitude: getPlaceCoords(place).latitude,
+          longitude: getPlaceCoords(place).longitude,
         },
         links: {
           maps: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place.name)}`,
@@ -272,6 +367,16 @@ export default function HomeScreen() {
     } catch (err) {
       console.error('Failed to save place:', err);
     }
+  };
+
+  const openPlaceLink = (place: PlaceResult, type: 'maps' | 'zomato' | 'swiggy') => {
+    const coords = getPlaceCoords(place);
+    const links = {
+      maps: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${place.name} ${coords.latitude},${coords.longitude}`)}`,
+      zomato: `https://www.zomato.com/search?q=${encodeURIComponent(place.name)}`,
+      swiggy: `https://www.swiggy.com/search?query=${encodeURIComponent(place.name)}`,
+    };
+    Linking.openURL(links[type]);
   };
 
   return (
@@ -319,16 +424,13 @@ export default function HomeScreen() {
                 pinColor={i === 0 ? C.accent : i === 1 ? C.green : C.red}
               />
             ))}
-            {visiblePlaces.map((place) => (
+            {rankedPlaces.map((place) => (
               <Marker
                 key={place._id}
-                coordinate={{
-                  latitude: place.location.coordinates[1],
-                  longitude: place.location.coordinates[0],
-                }}
+                coordinate={getPlaceCoords(place)}
                 title={place.name}
-                description={place.category}
-                pinColor={C.green}
+                description={`${place.category} · Fair ${place.fairnessScore}`}
+                pinColor={C.red}
               />
             ))}
             {midpoint && (
@@ -357,7 +459,7 @@ export default function HomeScreen() {
           {midpoint && (
             <View style={s.mapStats}>
               <View style={s.mapStatItem}>
-                <Text style={s.mapStatVal}>{visiblePlaces.length}</Text>
+                <Text style={s.mapStatVal}>{rankedPlaces.length}</Text>
                 <Text style={s.mapStatLabel}>Spots</Text>
               </View>
               <View style={s.mapStatDivider} />
@@ -494,10 +596,10 @@ export default function HomeScreen() {
         {/* ── Results ── */}
         <View style={s.resultsHead}>
           <Text style={s.sectionLabel}>NEARBY SPOTS</Text>
-          <Text style={s.resultsCount}>{visiblePlaces.length} found</Text>
+          <Text style={s.resultsCount}>Top {rankedPlaces.length} of {visiblePlaces.length}</Text>
         </View>
 
-        {visiblePlaces.length === 0 ? (
+        {rankedPlaces.length === 0 ? (
           <View style={s.emptyCard}>
             <View style={s.emptyIcon}>
               <Ionicons name="map-outline" size={28} color={C.textMuted} />
@@ -510,52 +612,102 @@ export default function HomeScreen() {
             </Text>
           </View>
         ) : (
-          visiblePlaces.map((place, i) => {
+          rankedPlaces.map((place, i) => {
             const catColors: Record<string, string> = {
               cafe: C.amber, restaurant: C.red, park: C.green, mall: C.accent, bar: C.red,
             };
             const dot = catColors[place.category] ?? C.accent;
             const savedState = savedPlaces.find((saved) => saved.placeId === place._id);
+            const expanded = expandedPlaceId === place._id;
             return (
-              <TouchableOpacity key={place._id} style={s.placeCard} activeOpacity={0.8}>
-                {/* Index */}
-                <View style={[s.placeIndex, { borderColor: dot + '55', backgroundColor: dot + '18' }]}>
-                  <Text style={[s.placeIndexText, { color: dot }]}>{i + 1}</Text>
-                </View>
-
-                {/* Info */}
-                <View style={s.placeInfo}>
-                  <Text style={s.placeName}>{place.name}</Text>
-                  <View style={s.placeMeta}>
-                    <View style={[s.catDot, { backgroundColor: dot }]} />
-                    <Text style={s.placeCategory}>{place.category}</Text>
-                    {place.vicinity ? (
-                      <Text style={s.placeVicinity} numberOfLines={1}> · {place.vicinity}</Text>
-                    ) : null}
+              <View key={place._id} style={[s.placeCard, { alignItems: 'stretch', flexDirection: 'column' }]}>
+                <TouchableOpacity
+                  style={s.placeSummaryRow}
+                  activeOpacity={0.8}
+                  onPress={() => setExpandedPlaceId(expanded ? null : place._id)}
+                >
+                  <View style={[s.placeIndex, { borderColor: dot + '55', backgroundColor: dot + '18' }]}>
+                    <Text style={[s.placeIndexText, { color: dot }]}>{i + 1}</Text>
                   </View>
-                </View>
 
-                <View style={{ alignItems: 'flex-end', gap: 8 }}>
-                  <TouchableOpacity
-                    style={[
-                      s.savePill,
-                      savedState && { backgroundColor: C.greenSoft, borderColor: C.green + '44' },
-                    ]}
-                    onPress={() => handleSavePlace(place)}
-                  >
-                    <Ionicons
-                      name={savedState ? 'bookmark' : 'bookmark-outline'}
-                      size={12}
-                      color={savedState ? C.green : C.accent}
-                    />
-                    <Text style={[s.savePillText, { color: savedState ? C.green : C.accent }]}>
-                      {savedState?.status === 'visited' ? 'Visited' : savedState ? 'Saved' : 'Save'}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
+                  <View style={s.placeInfo}>
+                    <Text style={s.placeName}>{place.name}</Text>
+                    <View style={s.placeMeta}>
+                      <View style={[s.catDot, { backgroundColor: dot }]} />
+                      <Text style={s.placeCategory}>{place.category}</Text>
+                      <Text style={s.placeVicinity} numberOfLines={1}> · Fair {place.fairnessScore}</Text>
+                    </View>
+                  </View>
 
-                <Ionicons name="chevron-forward" size={14} color={C.textMuted} style={{ marginLeft: 4 }} />
-              </TouchableOpacity>
+                  <Ionicons
+                    name={expanded ? 'chevron-up' : 'chevron-down'}
+                    size={16}
+                    color={C.textMuted}
+                  />
+                </TouchableOpacity>
+
+                {expanded ? (
+                  <>
+                    <Text style={s.placeReason}>{place.reason}</Text>
+                    {place.vicinity ? (
+                      <Text style={s.placeVicinity}>{place.vicinity}</Text>
+                    ) : null}
+
+                    <View style={s.badgeRow}>
+                      <View style={s.badge}>
+                        <Text style={s.badgeText}>Fair {place.fairnessScore}</Text>
+                      </View>
+                      <View style={s.badge}>
+                        <Text style={s.badgeText}>Avg {place.travelStats.averageMinutes}m</Text>
+                      </View>
+                      <View style={s.badge}>
+                        <Text style={s.badgeText}>Max {place.travelStats.maxMinutes}m</Text>
+                      </View>
+                      {savedState ? (
+                        <View style={s.badge}>
+                          <Text style={s.badgeText}>{savedState.status === 'visited' ? 'Visited' : 'Saved'}</Text>
+                        </View>
+                      ) : null}
+                    </View>
+
+                    <View style={s.travelList}>
+                      {place.travelTimes.map((item) => (
+                        <Text key={`${place._id}-${item.personId}`} style={s.travelText}>
+                          {item.name}: {item.durationMinutes} min · {item.distanceKm} km
+                        </Text>
+                      ))}
+                    </View>
+
+                    <View style={s.placeActions}>
+                      <TouchableOpacity
+                        style={[
+                          s.savePill,
+                          savedState && { backgroundColor: C.greenSoft, borderColor: C.green + '44' },
+                        ]}
+                        onPress={() => handleSavePlace(place)}
+                      >
+                        <Ionicons
+                          name={savedState ? 'bookmark' : 'bookmark-outline'}
+                          size={12}
+                          color={savedState ? C.green : C.accent}
+                        />
+                        <Text style={[s.savePillText, { color: savedState ? C.green : C.accent }]}>
+                          {savedState?.status === 'visited' ? 'Visited' : savedState ? 'Saved' : 'Save'}
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={s.savePill} onPress={() => openPlaceLink(place, 'maps')}>
+                        <Text style={s.savePillText}>Maps</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={s.savePill} onPress={() => openPlaceLink(place, 'zomato')}>
+                        <Text style={s.savePillText}>Zomato</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={s.savePill} onPress={() => openPlaceLink(place, 'swiggy')}>
+                        <Text style={s.savePillText}>Swiggy</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </>
+                ) : null}
+              </View>
             );
           })
         )}

@@ -394,6 +394,11 @@ export const s = StyleSheet.create({
     marginBottom: 8,
     gap: 12,
   },
+  placeSummaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
   placeIndex: {
     width: 34,
     height: 34,
@@ -436,6 +441,41 @@ export const s = StyleSheet.create({
     fontSize: 11,
     color: C.textMuted,
     flex: 1,
+  },
+  placeReason: {
+    fontSize: 12,
+    color: C.textSub,
+    lineHeight: 18,
+  },
+  badgeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  badge: {
+    backgroundColor: C.surface,
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+  },
+  badgeText: {
+    fontSize: 11,
+    color: C.textSub,
+    fontWeight: '700',
+  },
+  travelList: {
+    gap: 4,
+  },
+  travelText: {
+    fontSize: 12,
+    color: C.textSub,
+  },
+  placeActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
   },
   savePill: {
     flexDirection: 'row',

@@ -287,7 +287,17 @@ export default function SavedScreen() {
       </ScrollView>
 
       {/* ── Filter tray ── */}
-      <View style={s.tray}>
+  <View
+    style={[
+      s.tray,
+      {
+        position: 'absolute',
+        bottom: 5,
+        left: 0,
+        right: 0,
+      },
+    ]}
+  >
         <View style={s.filterBar}>
           {FILTERS.map(({ key, label, icon }) => {
             const active = filter === key;

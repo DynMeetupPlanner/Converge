@@ -208,8 +208,8 @@ export default function SettingsScreen() {
         {/* ── Preferences ── */}
         <Text style={s.sectionLabel}>PREFERENCES</Text>
         <View style={s.group}>
-
-          {/* Notifications toggle */}
+{/*
+          
           <View style={s.settingRow}>
             <View style={[s.settingIcon, { backgroundColor: C.accentSoft, borderColor: C.accent + '44' }]}>
               <Ionicons name="notifications" size={15} color={C.accent} />
@@ -228,7 +228,7 @@ export default function SettingsScreen() {
 
           <View style={s.divider} />
 
-          {/* Location toggle */}
+          
           <View style={s.settingRow}>
             <View style={[s.settingIcon, { backgroundColor: C.greenSoft, borderColor: C.green + '44' }]}>
               <Ionicons name="location" size={15} color={C.green} />

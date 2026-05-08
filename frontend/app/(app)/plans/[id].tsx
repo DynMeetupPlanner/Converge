@@ -29,6 +29,7 @@ const PRICE_LEVELS = ['any', 'unknown', 'budget', 'moderate', 'premium'];
 type TravelMode = typeof TRAVEL_MODES[number];
 type AvailabilitySlot = { day: string; startTime: string; endTime: string };
 type SavedPlace = { placeId: string; status: 'saved' | 'visited' };
+type PlanVote = { placeId: string; userId: string };
 type Recommendation = {
   placeId: string;
   name: string;
@@ -40,6 +41,10 @@ type Recommendation = {
   openingHours?: string;
   phone?: string;
   website?: string;
+  location: {
+    latitude: number;
+    longitude: number;
+  };
   openNow: boolean | null;
   voteCount: number;
   votedBy: string[];
@@ -70,6 +75,8 @@ export default function PlanDetailScreen() {
   const { id: planId } = useLocalSearchParams();
   const { user } = useAuth();
   const { currentPlan, setCurrentPlan } = usePlans();
+  const planIdString = Array.isArray(planId) ? planId[0] : String(planId || '');
+  const activePlanIdRef = React.useRef(planIdString);
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -93,6 +100,20 @@ export default function PlanDetailScreen() {
   const [savedPlaces, setSavedPlaces] = useState<SavedPlace[]>([]);
   const [hasChosenPreference, setHasChosenPreference] = useState(false);
   const [hasChosenCategoryFilter, setHasChosenCategoryFilter] = useState(false);
+  const [expandedPlaceId, setExpandedPlaceId] = useState<string | null>(null);
+
+  useEffect(() => {
+    activePlanIdRef.current = planIdString;
+    setCurrentPlan(null);
+    setLoading(true);
+    setRefreshing(false);
+    setRecommendations([]);
+    setEmergencyAlternatives([]);
+    setAvailabilityMatches([]);
+    setRecommendationLoading(false);
+    setRecommendationNote('');
+    setExpandedPlaceId(null);
+  }, [planIdString, setCurrentPlan]);
 
   useEffect(() => {
     if (user?.preferredSpotType) {
@@ -106,19 +127,23 @@ export default function PlanDetailScreen() {
   }, [hasChosenCategoryFilter, hasChosenPreference, user?.preferredSpotType]);
 
   const fetchPlanDetails = React.useCallback(async () => {
+    if (!planIdString) return;
     try {
-      const res = await fetch(`${API_BASE}/plans/${planId}`);
+      const res = await fetch(`${API_BASE}/plans/${planIdString}`);
       const data = await res.json();
+      if (activePlanIdRef.current !== planIdString) return;
       if (res.ok) {
         setCurrentPlan(data.plan);
       }
     } catch (err) {
       console.error('Fetch plan error:', err);
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (activePlanIdRef.current === planIdString) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
-  }, [planId, setCurrentPlan]);
+  }, [planIdString, setCurrentPlan]);
 
   useEffect(() => {
     fetchPlanDetails();
@@ -162,7 +187,7 @@ export default function PlanDetailScreen() {
       const { latitude, longitude } = location.coords;
 
       setSubmitting(true);
-      const res = await fetch(`${API_BASE}/plans/${planId}/location`, {
+      const res = await fetch(`${API_BASE}/plans/${planIdString}/location`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -191,7 +216,7 @@ export default function PlanDetailScreen() {
   };
 
   const fetchRecommendations = React.useCallback(async () => {
-    if (!currentPlan?.members?.filter(m => m.location).length) return;
+    if (!planIdString || String(currentPlan?._id) !== planIdString || !currentPlan?.members?.filter(m => m.location).length) return;
     setRecommendationLoading(true);
     try {
       const params = new URLSearchParams({
@@ -202,33 +227,53 @@ export default function PlanDetailScreen() {
         openNow: String(openNowOnly),
         travelMode,
       });
-      const res = await fetch(`${API_BASE}/plans/${planId}/recommendations?${params.toString()}`);
+      const res = await fetch(`${API_BASE}/plans/${planIdString}/recommendations?${params.toString()}`);
       const data = await res.json();
+      if (activePlanIdRef.current !== planIdString) return;
       if (!res.ok) {
         setRecommendationNote(data.msg || 'Could not load recommendations');
         return;
       }
-      setRecommendations(data.recommendations || []);
+      const fairnessRanked = [...(data.recommendations || [])]
+        .sort((a, b) => b.fairnessScore - a.fairnessScore)
+        .slice(0, 7);
+      setRecommendations(fairnessRanked);
+      setExpandedPlaceId(null);
       setEmergencyAlternatives(data.emergencyAlternatives || []);
       setAvailabilityMatches(data.availabilityMatches || []);
       setRecommendationNote(data.ratingNote || '');
     } catch (err) {
       console.error('Recommendation error:', err);
-      setRecommendationNote('Could not load smart recommendations');
+      if (activePlanIdRef.current === planIdString) {
+        setRecommendationNote('Could not load smart recommendations');
+      }
     } finally {
-      setRecommendationLoading(false);
+      if (activePlanIdRef.current === planIdString) {
+        setRecommendationLoading(false);
+      }
     }
-  }, [categoryFilter, currentPlan?.members, openNowOnly, planId, priceLevel, travelMode]);
+  }, [categoryFilter, currentPlan?._id, currentPlan?.members, openNowOnly, planIdString, priceLevel, travelMode]);
 
   useEffect(() => {
-    if ((currentPlan?.members?.filter(m => m.location).length || 0) >= 2) {
+    if (String(currentPlan?._id) === planIdString && (currentPlan?.members?.filter(m => m.location).length || 0) >= 2) {
       fetchRecommendations();
     }
-  }, [currentPlan?._id, currentPlan?.members?.length, fetchRecommendations]);
+  }, [currentPlan?._id, currentPlan?.members?.length, fetchRecommendations, planIdString]);
+
+  const applyVotesToRecommendations = (votes: PlanVote[] = []) => {
+    setRecommendations((current) => current.map((place) => {
+      const placeVotes = votes.filter((vote) => vote.placeId === place.placeId);
+      return {
+        ...place,
+        voteCount: placeVotes.length,
+        votedBy: placeVotes.map((vote) => String(vote.userId)),
+      };
+    }));
+  };
 
   const handleVote = async (place: Recommendation) => {
     try {
-      const res = await fetch(`${API_BASE}/plans/${planId}/vote`, {
+      const res = await fetch(`${API_BASE}/plans/${planIdString}/vote`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user?.id, place }),
@@ -236,7 +281,7 @@ export default function PlanDetailScreen() {
       const data = await res.json();
       if (res.ok) {
         setCurrentPlan(data.plan);
-        fetchRecommendations();
+        applyVotesToRecommendations(data.plan?.votes || []);
       } else {
         alert(data.msg || 'Could not vote');
       }
@@ -269,7 +314,7 @@ export default function PlanDetailScreen() {
   const handleAddHistory = async (place: Recommendation) => {
     await handleSavePlace(place, 'visited');
     try {
-      const res = await fetch(`${API_BASE}/plans/${planId}/history`, {
+      const res = await fetch(`${API_BASE}/plans/${planIdString}/history`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ place }),
@@ -293,7 +338,7 @@ export default function PlanDetailScreen() {
     );
   }
 
-  if (!currentPlan) return null;
+  if (!currentPlan || String(currentPlan._id) !== planIdString) return null;
 
   const userMember = currentPlan.members?.find(m => m.userId === user?.id);
   const hasShared = !!userMember?.location;
@@ -312,7 +357,7 @@ export default function PlanDetailScreen() {
             <Text style={s.title}>{currentPlan.name}</Text>
             <Text style={s.subtitle}>Organized by {currentPlan.creatorId === user?.id ? 'You' : 'Friend'}</Text>
           </View>
-          <TouchableOpacity onPress={() => router.push(`/plans/${planId}/add-members`)}>
+          <TouchableOpacity onPress={() => router.push(`/plans/${planIdString}/add-members`)}>
             <Ionicons name="person-add-outline" size={22} color={C.accent} />
           </TouchableOpacity>
         </View>
@@ -350,6 +395,20 @@ export default function PlanDetailScreen() {
                   pinColor={C.green}
                 />
               ))}
+              {recommendations
+                .filter(place => Number.isFinite(place.location?.latitude) && Number.isFinite(place.location?.longitude))
+                .map(place => (
+                  <Marker
+                    key={`place-${place.placeId}`}
+                    coordinate={{
+                      latitude: place.location.latitude,
+                      longitude: place.location.longitude,
+                    }}
+                    title={place.name}
+                    description={`${place.category} · Fair ${place.fairnessScore}`}
+                    pinColor={C.red}
+                  />
+                ))}
               <Circle
                 center={{
                   latitude: currentPlan.midpoint.latitude,
@@ -518,9 +577,6 @@ export default function PlanDetailScreen() {
               </TouchableOpacity>
             </View>
 
-            {recommendationNote ? (
-              <Text style={[s.metaText, { marginTop: 12 }]}>{recommendationNote}</Text>
-            ) : null}
           </View>
 
           {availabilityMatches.length > 0 && (
@@ -543,71 +599,87 @@ export default function PlanDetailScreen() {
             </View>
           ) : recommendations.map((place, index) => {
             const hasVoted = place.votedBy?.some(voter => String(voter) === String(user?.id));
-            const topTravel = place.travelTimes?.slice(0, 3) || [];
+            const allTravel = place.travelTimes || [];
             const savedState = savedPlaces.find((saved) => saved.placeId === place.placeId);
+            const expanded = expandedPlaceId === place.placeId;
             return (
               <View key={place.placeId} style={s.card}>
-                <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
-                  <View style={[s.avatar, { backgroundColor: C.accentSoft }]}>
-                    <Text style={s.avatarText}>{index + 1}</Text>
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.userName}>{place.name}</Text>
-                    <Text style={s.userTag}>
-                      {place.category} · {place.vicinity || 'near meeting zone'}
-                    </Text>
-                    <Text style={[s.metaText, { marginTop: 6 }]}>{place.reason}</Text>
-                  </View>
-                </View>
-
-                <View style={{ flexDirection: 'row', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
-                  <View style={s.badge}>
-                    <Text style={s.badgeText}>Fair {place.fairnessScore}</Text>
-                  </View>
-                  <View style={s.badge}>
-                    <Text style={s.badgeText}>Avg {place.travelStats.averageMinutes}m</Text>
-                  </View>
-                  <View style={s.badge}>
-                    <Text style={s.badgeText}>Votes {place.voteCount}</Text>
-                  </View>
-                  <View style={s.badge}>
-                    <Text style={s.badgeText}>{place.openNow === true ? 'Open' : 'Hours unknown'}</Text>
-                  </View>
-                  {savedState ? (
-                    <View style={s.badge}>
-                      <Text style={s.badgeText}>{savedState.status === 'visited' ? 'Visited' : 'Saved'}</Text>
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={() => setExpandedPlaceId(expanded ? null : place.placeId)}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                    <View style={[s.avatar, { backgroundColor: C.accentSoft }]}>
+                      <Text style={s.avatarText}>{index + 1}</Text>
                     </View>
-                  ) : null}
-                </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.userName}>{place.name}</Text>
+                      <Text style={s.userTag}>
+                        Fair {place.fairnessScore} · {place.category}
+                      </Text>
+                    </View>
+                    <Ionicons
+                      name={expanded ? 'chevron-up' : 'chevron-down'}
+                      size={18}
+                      color={C.textMuted}
+                    />
+                  </View>
+                </TouchableOpacity>
 
-                <View style={{ marginTop: 12 }}>
-                  {topTravel.map(item => (
-                    <Text key={`${place.placeId}-${item.userId}`} style={s.metaText}>
-                      {item.name}: {item.durationMinutes} min · {item.distanceKm} km
-                    </Text>
-                  ))}
-                </View>
+                {expanded ? (
+                  <>
+                    <Text style={[s.metaText, { marginTop: 12 }]}>{place.reason}</Text>
 
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 14 }}>
-                  <TouchableOpacity style={[s.chip, hasVoted && s.chipActive]} onPress={() => handleVote(place)}>
-                    <Text style={[s.chipText, hasVoted && s.chipTextActive]}>{hasVoted ? 'Voted' : 'Vote'}</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={s.chip} onPress={() => handleSavePlace(place)}>
-                    <Text style={s.chipText}>{savedState?.status === 'visited' ? 'Visited' : savedState ? 'Saved' : 'Save'}</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={s.chip} onPress={() => handleAddHistory(place)}>
-                    <Text style={s.chipText}>Visited</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={s.chip} onPress={() => openLink(place.links.maps)}>
-                    <Text style={s.chipText}>Maps</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={s.chip} onPress={() => openLink(place.links.zomato)}>
-                    <Text style={s.chipText}>Zomato</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={s.chip} onPress={() => openLink(place.links.swiggy)}>
-                    <Text style={s.chipText}>Swiggy</Text>
-                  </TouchableOpacity>
-                </View>
+                    <View style={{ flexDirection: 'row', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
+                      <View style={s.badge}>
+                        <Text style={s.badgeText}>Fair {place.fairnessScore}</Text>
+                      </View>
+                      <View style={s.badge}>
+                        <Text style={s.badgeText}>Avg {place.travelStats.averageMinutes}m</Text>
+                      </View>
+                      <View style={s.badge}>
+                        <Text style={s.badgeText}>Votes {place.voteCount}</Text>
+                      </View>
+                      <View style={s.badge}>
+                        <Text style={s.badgeText}>{place.openNow === true ? 'Open' : 'Hours unknown'}</Text>
+                      </View>
+                      {savedState ? (
+                        <View style={s.badge}>
+                          <Text style={s.badgeText}>{savedState.status === 'visited' ? 'Visited' : 'Saved'}</Text>
+                        </View>
+                      ) : null}
+                    </View>
+
+                    <View style={{ marginTop: 12 }}>
+                      {allTravel.map(item => (
+                        <Text key={`${place.placeId}-${item.userId}`} style={s.metaText}>
+                          {item.name}: {item.durationMinutes} min · {item.distanceKm} km
+                        </Text>
+                      ))}
+                    </View>
+
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 14 }}>
+                      <TouchableOpacity style={[s.chip, hasVoted && s.chipActive]} onPress={() => handleVote(place)}>
+                        <Text style={[s.chipText, hasVoted && s.chipTextActive]}>{hasVoted ? 'Voted' : 'Vote'}</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={s.chip} onPress={() => handleSavePlace(place)}>
+                        <Text style={s.chipText}>{savedState?.status === 'visited' ? 'Visited' : savedState ? 'Saved' : 'Save'}</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={s.chip} onPress={() => handleAddHistory(place)}>
+                        <Text style={s.chipText}>Visited</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={s.chip} onPress={() => openLink(place.links.maps)}>
+                        <Text style={s.chipText}>Maps</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={s.chip} onPress={() => openLink(place.links.zomato)}>
+                        <Text style={s.chipText}>Zomato</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={s.chip} onPress={() => openLink(place.links.swiggy)}>
+                        <Text style={s.chipText}>Swiggy</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </>
+                ) : null}
               </View>
             );
           })}
