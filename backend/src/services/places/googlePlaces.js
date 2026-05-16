@@ -2,6 +2,14 @@ const GOOGLE_PLACES_NEARBY_URL = 'https://maps.googleapis.com/maps/api/place/nea
 const NEARBY_CACHE_TTL_MS = 1000 * 60 * 5;
 const nearbyCache = new Map();
 
+const GOOGLE_TYPE_BY_CATEGORY = {
+  cafe: 'cafe',
+  restaurant: 'restaurant',
+  park: 'park',
+  mall: 'shopping_mall',
+  bar: 'bar',
+};
+
 function clampRadiusMeters(radiusKm) {
   const meters = Number(radiusKm) * 1000;
   if (!Number.isFinite(meters)) return 5000;
@@ -52,8 +60,8 @@ function priceLevelToBucket(priceLevel) {
   return 'premium';
 }
 
-async function fetchGoogleNearbyRestaurants({ lat, lng, radiusKm, apiKey }) {
-  const cacheKey = `${Math.round(Number(lat) * 1000) / 1000},${Math.round(Number(lng) * 1000) / 1000},${Math.round(Number(radiusKm) * 10) / 10}`;
+async function fetchGoogleNearbyByType({ lat, lng, radiusKm, apiKey, googleType }) {
+  const cacheKey = `${googleType}:${Math.round(Number(lat) * 1000) / 1000},${Math.round(Number(lng) * 1000) / 1000},${Math.round(Number(radiusKm) * 10) / 10}`;
   const cached = nearbyCache.get(cacheKey);
   if (cached && (Date.now() - cached.at) < NEARBY_CACHE_TTL_MS) return cached.value;
 
@@ -62,7 +70,7 @@ async function fetchGoogleNearbyRestaurants({ lat, lng, radiusKm, apiKey }) {
     key: apiKey,
     location: `${Number(lat)},${Number(lng)}`,
     radius: String(radiusMeters),
-    type: 'restaurant',
+    type: googleType,
   });
 
   const results = [];
@@ -80,6 +88,10 @@ async function fetchGoogleNearbyRestaurants({ lat, lng, radiusKm, apiKey }) {
     if (!response.ok) throw new Error(`Google Places nearbysearch error ${response.status}: ${bodyText.slice(0, 200)}`);
 
     const data = JSON.parse(bodyText);
+    if (data.status && !['OK', 'ZERO_RESULTS'].includes(data.status)) {
+      throw new Error(`Google Places ${googleType} status ${data.status}: ${data.error_message || 'no error message'}`);
+    }
+
     const pageResults = Array.isArray(data.results) ? data.results : [];
     for (const item of pageResults) {
       const glat = item?.geometry?.location?.lat;
@@ -132,37 +144,47 @@ export async function enrichPlacesWithGoogleIfNeeded({ places, lat, lng, radiusK
   const apiKey = process.env.GOOGLE_PLACES_API_KEY;
   if (!apiKey) return places;
 
-  const onlyRestaurants = places.filter((p) => p?.category === 'restaurant');
-  if (!onlyRestaurants.length) return places;
+  try {
+    const categories = [...new Set(
+      places
+        .map((p) => p?.category)
+        .filter((category) => GOOGLE_TYPE_BY_CATEGORY[category])
+    )];
 
-  const googleRestaurants = await fetchGoogleNearbyRestaurants({
-    lat,
-    lng,
-    radiusKm,
-    apiKey,
-  });
+    if (!categories.length) return places;
 
-  if (!googleRestaurants.length) return places;
-
-  const enrichedIds = new Set();
-
-  for (const p of onlyRestaurants) {
-    // Skip if already enriched from a provider.
-    if (p?.ratingSource === 'google' && (Number.isFinite(p.rating) || p.priceLevel)) continue;
-
-    const match = pickBestGoogleMatch(p, googleRestaurants);
-    if (!match) continue;
-
-    p.googlePlaceId = match.placeId;
-    if (Number.isFinite(match.rating)) {
-      p.rating = match.rating;
-      p.ratingSource = 'google';
+    const googleCandidatesByCategory = new Map();
+    for (const category of categories) {
+      const candidates = await fetchGoogleNearbyByType({
+        lat,
+        lng,
+        radiusKm,
+        apiKey,
+        googleType: GOOGLE_TYPE_BY_CATEGORY[category],
+      });
+      googleCandidatesByCategory.set(category, candidates);
     }
-    if (Number.isFinite(match.userRatingsTotal)) p.userRatingsTotal = match.userRatingsTotal;
 
-    p.priceLevel = priceLevelToBucket(match.priceLevel);
+    for (const p of places) {
+      if (p?.ratingSource === 'google' && (Number.isFinite(p.rating) || p.priceLevel)) continue;
 
-    enrichedIds.add(p._id);
+      const googleCandidates = googleCandidatesByCategory.get(p.category) || [];
+      if (!googleCandidates.length) continue;
+
+      const match = pickBestGoogleMatch(p, googleCandidates);
+      if (!match) continue;
+
+      p.googlePlaceId = match.placeId;
+      if (Number.isFinite(match.rating)) {
+        p.rating = match.rating;
+        p.ratingSource = 'google';
+      }
+      if (Number.isFinite(match.userRatingsTotal)) p.userRatingsTotal = match.userRatingsTotal;
+
+      p.priceLevel = priceLevelToBucket(match.priceLevel);
+    }
+  } catch (err) {
+    console.warn('Google Places enrichment skipped:', err.message);
   }
 
   // Keep return value stable (original array objects mutated above)

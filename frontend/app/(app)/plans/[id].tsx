@@ -36,6 +36,7 @@ type Recommendation = {
   category: string;
   rating: number | null;
   ratingSource: string;
+  userRatingsTotal?: number | null;
   priceLevel: string;
   vicinity?: string;
   openingHours?: string;
@@ -70,6 +71,12 @@ type Recommendation = {
     durationMinutes: number;
   }[];
 };
+
+function formatRating(place: Pick<Recommendation, 'rating' | 'userRatingsTotal'>): string | null {
+  if (!Number.isFinite(place.rating)) return null;
+  const total = Number.isFinite(place.userRatingsTotal) ? ` (${place.userRatingsTotal})` : '';
+  return `${Number(place.rating).toFixed(1)}${total}`;
+}
 
 export default function PlanDetailScreen() {
   const { id: planId } = useLocalSearchParams();
@@ -602,6 +609,7 @@ export default function PlanDetailScreen() {
             const allTravel = place.travelTimes || [];
             const savedState = savedPlaces.find((saved) => saved.placeId === place.placeId);
             const expanded = expandedPlaceId === place.placeId;
+            const ratingText = formatRating(place);
             return (
               <View key={place.placeId} style={s.card}>
                 <TouchableOpacity
@@ -615,7 +623,7 @@ export default function PlanDetailScreen() {
                     <View style={{ flex: 1 }}>
                       <Text style={s.userName}>{place.name}</Text>
                       <Text style={s.userTag}>
-                        Fair {place.fairnessScore} · {place.category}
+                        {ratingText ? `${ratingText} stars · ` : ''}Fair {place.fairnessScore} · {place.category}
                       </Text>
                     </View>
                     <Ionicons
@@ -631,6 +639,11 @@ export default function PlanDetailScreen() {
                     <Text style={[s.metaText, { marginTop: 12 }]}>{place.reason}</Text>
 
                     <View style={{ flexDirection: 'row', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
+                      {ratingText ? (
+                        <View style={s.badge}>
+                          <Text style={s.badgeText}>Rating {ratingText}</Text>
+                        </View>
+                      ) : null}
                       <View style={s.badge}>
                         <Text style={s.badgeText}>Fair {place.fairnessScore}</Text>
                       </View>

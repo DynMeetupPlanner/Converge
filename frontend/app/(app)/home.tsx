@@ -22,7 +22,9 @@ type Coords = { latitude: number; longitude: number };
 type PlaceResult = {
   _id: string;
   name: string;
-  rating: number;
+  rating?: number | null;
+  ratingSource?: string | null;
+  userRatingsTotal?: number | null;
   category: string;
   location: { coordinates: [number, number] };
   vicinity?: string;
@@ -133,6 +135,12 @@ function getFairnessScore(travelTimes: TravelEstimate[]): number {
   const balancePenalty = avg > 0 ? (spread / avg) * 42 : 0;
   const burdenPenalty = Math.max(0, max - 45) * 0.6;
   return Math.max(0, Math.min(100, Math.round(100 - balancePenalty - burdenPenalty)));
+}
+
+function formatRating(place: Pick<PlaceResult, 'rating' | 'userRatingsTotal'>): string | null {
+  if (!Number.isFinite(place.rating)) return null;
+  const total = Number.isFinite(place.userRatingsTotal) ? ` (${place.userRatingsTotal})` : '';
+  return `${Number(place.rating).toFixed(1)}${total}`;
 }
 
 function rankPlacesByFairness(places: PlaceResult[], markers: { id: number; name: string; coords: Coords }[]): RankedPlace[] {
@@ -619,6 +627,7 @@ export default function HomeScreen() {
             const dot = catColors[place.category] ?? C.accent;
             const savedState = savedPlaces.find((saved) => saved.placeId === place._id);
             const expanded = expandedPlaceId === place._id;
+            const ratingText = formatRating(place);
             return (
               <View key={place._id} style={[s.placeCard, { alignItems: 'stretch', flexDirection: 'column' }]}>
                 <TouchableOpacity
@@ -635,7 +644,9 @@ export default function HomeScreen() {
                     <View style={s.placeMeta}>
                       <View style={[s.catDot, { backgroundColor: dot }]} />
                       <Text style={s.placeCategory}>{place.category}</Text>
-                      <Text style={s.placeVicinity} numberOfLines={1}> · Fair {place.fairnessScore}</Text>
+                      <Text style={s.placeVicinity} numberOfLines={1}>
+                        {ratingText ? ` · ${ratingText} stars` : ''} · Fair {place.fairnessScore}
+                      </Text>
                     </View>
                   </View>
 
@@ -654,6 +665,11 @@ export default function HomeScreen() {
                     ) : null}
 
                     <View style={s.badgeRow}>
+                      {ratingText ? (
+                        <View style={s.badge}>
+                          <Text style={s.badgeText}>Rating {ratingText}</Text>
+                        </View>
+                      ) : null}
                       <View style={s.badge}>
                         <Text style={s.badgeText}>Fair {place.fairnessScore}</Text>
                       </View>

@@ -30,7 +30,7 @@ function buildMongoQuery({ lat, lng, radius, category }) {
 
 function mapOverpassPlaceToDocument(place) {
   return {
-    externalId: place._id,
+    externalId: place.externalId || place._id,
     source: 'overpass',
     name: place.name,
     category: place.category,
@@ -60,7 +60,7 @@ async function upsertPlaces(places) {
   await Place.bulkWrite(
     places.map((place) => ({
       updateOne: {
-        filter: { externalId: place._id },
+        filter: { externalId: place.externalId || place._id },
         update: { $set: mapOverpassPlaceToDocument(place) },
         upsert: true,
       },
@@ -79,7 +79,18 @@ router.get('/nearby', async (req, res) => {
     const cacheFresh = newestCache && (Date.now() - newestCache) < CACHE_STALE_MS;
 
     if (cachedPlaces.length >= MIN_CACHE_RESULTS && cacheFresh) {
-      return res.json({ places: cachedPlaces, source: 'mongo-cache' });
+      let places = cachedPlaces.map((place) => place.toObject());
+      const hasGoogleRatings = places.some((place) => place.ratingSource === 'google' && Number.isFinite(place.rating));
+      if (!hasGoogleRatings && process.env.GOOGLE_PLACES_API_KEY) {
+        places = await enrichPlacesWithGoogleIfNeeded({
+          places,
+          lat,
+          lng,
+          radiusKm: radius,
+        });
+        await upsertPlaces(places);
+      }
+      return res.json({ places, source: 'mongo-cache' });
     }
 
     const provider = String(process.env.PLACES_PROVIDER || 'overpass').toLowerCase();
