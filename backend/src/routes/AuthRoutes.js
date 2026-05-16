@@ -4,6 +4,14 @@ import User from '../models/User.js';
 
 const router = express.Router();
 
+function toPublicUser(userDoc) {
+  return {
+    id: String(userDoc._id),
+    name: userDoc.name || userDoc.email || 'User',
+    username: userDoc.username || userDoc.email,
+  };
+}
+
 router.post('/register', async (req, res) => {
   try {
     const { name, username, email, password, dateOfBirth, gender } = req.body;
@@ -174,16 +182,153 @@ router.get('/search', async (req, res) => {
       ]
     }).limit(10).select('name username email _id').lean();
 
-    const formattedUsers = users.map(u => ({
-      id: String(u._id),
-      name: u.name || u.email || 'User',
-      username: u.username || u.email
-    }));
-
-    res.json({ users: formattedUsers });
+    res.json({ users: users.map(toPublicUser) });
   } catch (err) {
     console.error('User search error:', err);
     res.status(500).json({ msg: 'User search failed' });
+  }
+});
+
+router.get('/friends', async (req, res) => {
+  try {
+    const rawUserId = Array.isArray(req.query.userId) ? req.query.userId[0] : req.query.userId;
+    const userId = String(rawUserId || '').trim();
+    if (!userId) return res.status(400).json({ msg: 'userId required' });
+
+    const user = await User.findById(userId).select('friends').lean();
+    if (!user) return res.status(404).json({ msg: 'User not found' });
+
+    const friends = await User.find({ _id: { $in: user.friends || [] } })
+      .select('name username email _id')
+      .sort({ name: 1 })
+      .lean();
+
+    res.json({ friends: friends.map(toPublicUser) });
+  } catch (err) {
+    console.error('Friends fetch error:', err);
+    res.status(500).json({ msg: 'Friends fetch failed' });
+  }
+});
+
+router.get('/requests', async (req, res) => {
+  try {
+    const rawUserId = Array.isArray(req.query.userId) ? req.query.userId[0] : req.query.userId;
+    const userId = String(rawUserId || '').trim();
+    if (!userId) return res.status(400).json({ msg: 'userId required' });
+
+    const user = await User.findById(userId)
+      .select('friendRequestsIncoming friendRequestsOutgoing')
+      .lean();
+    if (!user) return res.status(404).json({ msg: 'User not found' });
+
+    const incomingIds = (user.friendRequestsIncoming || []).map((r) => r.fromUserId).filter(Boolean);
+    const outgoingIds = (user.friendRequestsOutgoing || []).map((r) => r.toUserId).filter(Boolean);
+
+    const [incomingUsers, outgoingUsers] = await Promise.all([
+      User.find({ _id: { $in: incomingIds } }).select('name username email _id').lean(),
+      User.find({ _id: { $in: outgoingIds } }).select('name username email _id').lean(),
+    ]);
+
+    res.json({
+      incoming: incomingUsers.map(toPublicUser),
+      outgoing: outgoingUsers.map(toPublicUser),
+    });
+  } catch (err) {
+    console.error('Requests fetch error:', err);
+    res.status(500).json({ msg: 'Requests fetch failed' });
+  }
+});
+
+router.post('/friend-request', async (req, res) => {
+  try {
+    const { fromUserId, toUserId } = req.body;
+    if (!fromUserId || !toUserId) return res.status(400).json({ msg: 'fromUserId and toUserId required' });
+    if (String(fromUserId) === String(toUserId)) return res.status(400).json({ msg: 'Cannot friend yourself' });
+
+    const [fromUser, toUser] = await Promise.all([
+      User.findById(fromUserId),
+      User.findById(toUserId),
+    ]);
+    if (!fromUser || !toUser) return res.status(404).json({ msg: 'User not found' });
+
+    const alreadyFriends = (fromUser.friends || []).some((id) => String(id) === String(toUser._id));
+    if (alreadyFriends) return res.status(400).json({ msg: 'Already friends' });
+
+    const outgoingExists = (fromUser.friendRequestsOutgoing || []).some((r) => String(r.toUserId) === String(toUser._id));
+    const incomingExists = (fromUser.friendRequestsIncoming || []).some((r) => String(r.fromUserId) === String(toUser._id));
+
+    // If they already requested you, accept immediately.
+    if (incomingExists) {
+      fromUser.friendRequestsIncoming = (fromUser.friendRequestsIncoming || []).filter((r) => String(r.fromUserId) !== String(toUser._id));
+      toUser.friendRequestsOutgoing = (toUser.friendRequestsOutgoing || []).filter((r) => String(r.toUserId) !== String(fromUser._id));
+
+      fromUser.friends = Array.from(new Set([...(fromUser.friends || []).map(String), String(toUser._id)])).map((id) => id);
+      toUser.friends = Array.from(new Set([...(toUser.friends || []).map(String), String(fromUser._id)])).map((id) => id);
+
+      await Promise.all([fromUser.save(), toUser.save()]);
+      return res.json({ msg: 'Friend request accepted', status: 'friends' });
+    }
+
+    if (outgoingExists) return res.status(400).json({ msg: 'Request already sent' });
+
+    fromUser.friendRequestsOutgoing = fromUser.friendRequestsOutgoing || [];
+    toUser.friendRequestsIncoming = toUser.friendRequestsIncoming || [];
+
+    fromUser.friendRequestsOutgoing.push({ toUserId: toUser._id, createdAt: new Date() });
+    toUser.friendRequestsIncoming.push({ fromUserId: fromUser._id, createdAt: new Date() });
+
+    await Promise.all([fromUser.save(), toUser.save()]);
+    res.json({ msg: 'Friend request sent', status: 'requested' });
+  } catch (err) {
+    console.error('Send friend request error:', err);
+    res.status(500).json({ msg: 'Friend request failed' });
+  }
+});
+
+router.post('/friend-request/accept', async (req, res) => {
+  try {
+    const { userId, fromUserId } = req.body;
+    if (!userId || !fromUserId) return res.status(400).json({ msg: 'userId and fromUserId required' });
+
+    const [user, fromUser] = await Promise.all([
+      User.findById(userId),
+      User.findById(fromUserId),
+    ]);
+    if (!user || !fromUser) return res.status(404).json({ msg: 'User not found' });
+
+    user.friendRequestsIncoming = (user.friendRequestsIncoming || []).filter((r) => String(r.fromUserId) !== String(fromUser._id));
+    fromUser.friendRequestsOutgoing = (fromUser.friendRequestsOutgoing || []).filter((r) => String(r.toUserId) !== String(user._id));
+
+    user.friends = Array.from(new Set([...(user.friends || []).map(String), String(fromUser._id)])).map((id) => id);
+    fromUser.friends = Array.from(new Set([...(fromUser.friends || []).map(String), String(user._id)])).map((id) => id);
+
+    await Promise.all([user.save(), fromUser.save()]);
+    res.json({ msg: 'Friend request accepted' });
+  } catch (err) {
+    console.error('Accept friend request error:', err);
+    res.status(500).json({ msg: 'Accept friend request failed' });
+  }
+});
+
+router.post('/friend-request/reject', async (req, res) => {
+  try {
+    const { userId, fromUserId } = req.body;
+    if (!userId || !fromUserId) return res.status(400).json({ msg: 'userId and fromUserId required' });
+
+    const [user, fromUser] = await Promise.all([
+      User.findById(userId),
+      User.findById(fromUserId),
+    ]);
+    if (!user || !fromUser) return res.status(404).json({ msg: 'User not found' });
+
+    user.friendRequestsIncoming = (user.friendRequestsIncoming || []).filter((r) => String(r.fromUserId) !== String(fromUser._id));
+    fromUser.friendRequestsOutgoing = (fromUser.friendRequestsOutgoing || []).filter((r) => String(r.toUserId) !== String(user._id));
+
+    await Promise.all([user.save(), fromUser.save()]);
+    res.json({ msg: 'Friend request rejected' });
+  } catch (err) {
+    console.error('Reject friend request error:', err);
+    res.status(500).json({ msg: 'Reject friend request failed' });
   }
 });
 

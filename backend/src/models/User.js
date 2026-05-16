@@ -119,6 +119,32 @@ const userSchema = new mongoose.Schema({
       enum: ['all', 'cafe', 'restaurant', 'park', 'mall', 'bar'],
       default: 'cafe',
     },
+    friends: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+    }],
+    friendRequestsIncoming: [{
+      fromUserId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: true,
+      },
+      createdAt: {
+        type: Date,
+        default: Date.now,
+      },
+    }],
+    friendRequestsOutgoing: [{
+      toUserId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: true,
+      },
+      createdAt: {
+        type: Date,
+        default: Date.now,
+      },
+    }],
 },{
     timestamps: true
 });

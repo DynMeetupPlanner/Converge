@@ -2,6 +2,7 @@ import express from 'express';
 import Plan from '../models/Plan.js';
 import User from '../models/User.js';
 import { fetchNearbyPlacesOverpass } from '../services/places/overpass.js';
+import { enrichPlacesWithGoogleIfNeeded } from '../services/places/googlePlaces.js';
 import {
   calculateCentroid,
   getCommonAvailability,
@@ -155,6 +156,13 @@ router.get('/:id/recommendations', async (req, res) => {
       lng: center.longitude,
       radiusKm: radius,
       category,
+    });
+
+    await enrichPlacesWithGoogleIfNeeded({
+      places,
+      lat: center.latitude,
+      lng: center.longitude,
+      radiusKm: radius,
     });
 
     const recommendations = rankMeetingPlaces({

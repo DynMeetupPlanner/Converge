@@ -7,6 +7,8 @@ const placeSchema = new mongoose.Schema({
   category: { type: String, enum: ['cafe', 'restaurant', 'park', 'mall', 'bar'], required: true },
   rating: { type: Number },
   ratingSource: { type: String },
+  userRatingsTotal: { type: Number },
+  googlePlaceId: { type: String },
   vicinity: { type: String },
   openingHours: { type: String },
   phone: { type: String },

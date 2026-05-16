@@ -2,6 +2,7 @@ import express from 'express';
 import Place from '../models/Place.js';
 import User from '../models/User.js';
 import { fetchNearbyPlacesOverpass } from '../services/places/overpass.js';
+import { enrichPlacesWithGoogleIfNeeded } from '../services/places/googlePlaces.js';
 
 const router = express.Router();
 const MIN_CACHE_RESULTS = 12;
@@ -35,6 +36,8 @@ function mapOverpassPlaceToDocument(place) {
     category: place.category,
     rating: place.rating ?? null,
     ratingSource: place.ratingSource || null,
+    userRatingsTotal: place.userRatingsTotal ?? null,
+    googlePlaceId: place.googlePlaceId ?? null,
     vicinity: place.vicinity,
     openingHours: place.openingHours,
     phone: place.phone,
@@ -82,12 +85,20 @@ router.get('/nearby', async (req, res) => {
     const provider = String(process.env.PLACES_PROVIDER || 'overpass').toLowerCase();
     if (provider === 'overpass') {
       try {
-        const places = await fetchNearbyPlacesOverpass({
+        let places = await fetchNearbyPlacesOverpass({
           lat,
           lng,
           radiusKm: radius,
           category: category || 'all',
         });
+
+        places = await enrichPlacesWithGoogleIfNeeded({
+          places,
+          lat,
+          lng,
+          radiusKm: radius,
+        });
+
         await upsertPlaces(places);
         const refreshedPlaces = await Place.find(mongoQuery).sort({ lastSeenAt: -1 }).limit(50);
         return res.json({
