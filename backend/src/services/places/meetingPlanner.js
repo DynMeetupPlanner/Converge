@@ -72,7 +72,8 @@ function normalizePlace(place) {
     name: place.name,
     category: place.category,
     rating: place.rating ?? null,
-    ratingSource: place.ratingSource || (place.rating ? 'provider' : 'unavailable_on_osm'),
+    ratingSource: place.ratingSource || (place.rating ? 'google' : null),
+    userRatingsTotal: place.userRatingsTotal ?? null,
     priceLevel: place.priceLevel || 'unknown',
     vicinity: place.vicinity,
     openingHours: place.openingHours,
@@ -80,6 +81,8 @@ function normalizePlace(place) {
     website: place.website,
     cuisine: place.cuisine,
     wheelchair: place.wheelchair,
+    openNow: typeof place.openNow === 'boolean' ? place.openNow : null,
+    businessStatus: place.businessStatus,
     location: { latitude, longitude },
     links: buildPlaceLinks({ name: place.name, latitude, longitude }),
   };
@@ -96,6 +99,7 @@ export function buildPlaceLinks({ name, latitude, longitude }) {
 }
 
 function isOpenNow(place) {
+  if (typeof place.openNow === 'boolean') return place.openNow;
   if (!place.openingHours) return null;
   return place.openingHours === '24/7';
 }
@@ -114,8 +118,8 @@ function buildReason({ fairnessScore, travelStats, place }) {
   const avg = Math.round(travelStats.averageMinutes);
   const max = travelStats.maxMinutes;
   const ratingText = place.rating
-    ? `rated ${place.rating.toFixed(1)}`
-    : 'OSM has no free public rating for this spot';
+    ? `rated ${place.rating.toFixed(1)} on Google`
+    : 'Google rating unavailable for this spot';
   return `Fairness ${fairnessScore}/100, average travel ${avg} min, longest travel ${max} min, ${ratingText}.`;
 }
 

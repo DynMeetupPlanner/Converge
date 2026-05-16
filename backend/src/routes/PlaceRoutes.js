@@ -1,15 +1,13 @@
 import express from 'express';
 import Place from '../models/Place.js';
 import User from '../models/User.js';
-import { fetchNearbyPlacesOverpass } from '../services/places/overpass.js';
-import { enrichPlacesWithGoogleIfNeeded } from '../services/places/googlePlaces.js';
+import { fetchNearbyPlacesGoogle } from '../services/places/googlePlaces.js';
 
 const router = express.Router();
-const MIN_CACHE_RESULTS = 12;
-const CACHE_STALE_MS = 1000 * 60 * 60 * 24 * 14;
 
 function buildMongoQuery({ lat, lng, radius, category }) {
   const query = {
+    source: 'google',
     location: {
       $nearSphere: {
         $geometry: {
@@ -28,10 +26,10 @@ function buildMongoQuery({ lat, lng, radius, category }) {
   return query;
 }
 
-function mapOverpassPlaceToDocument(place) {
+function mapPlaceToDocument(place) {
   return {
     externalId: place.externalId || place._id,
-    source: 'overpass',
+    source: place.source || 'google',
     name: place.name,
     category: place.category,
     rating: place.rating ?? null,
@@ -45,6 +43,8 @@ function mapOverpassPlaceToDocument(place) {
     cuisine: place.cuisine,
     wheelchair: place.wheelchair,
     priceLevel: place.priceLevel,
+    openNow: place.openNow,
+    businessStatus: place.businessStatus,
     location: {
       type: 'Point',
       coordinates: place.location?.coordinates || [],
@@ -61,7 +61,7 @@ async function upsertPlaces(places) {
     places.map((place) => ({
       updateOne: {
         filter: { externalId: place.externalId || place._id },
-        update: { $set: mapOverpassPlaceToDocument(place) },
+        update: { $set: mapPlaceToDocument(place) },
         upsert: true,
       },
     })),
@@ -76,91 +76,39 @@ router.get('/nearby', async (req, res) => {
     const debug = {
       route: 'GET /places/nearby',
       query: { lat, lng, radius, category: category || 'all' },
-      provider: String(process.env.PLACES_PROVIDER || 'overpass').toLowerCase(),
+      provider: 'google',
       googleApiKeyPresent: Boolean(process.env.GOOGLE_PLACES_API_KEY),
-      cache: {},
       serverTime: new Date().toISOString(),
     };
     const mongoQuery = buildMongoQuery({ lat, lng, radius, category });
-    const cachedPlaces = await Place.find(mongoQuery).sort({ lastSeenAt: -1 }).limit(50);
-    const newestCache = cachedPlaces[0]?.cachedAt ? new Date(cachedPlaces[0].cachedAt).getTime() : 0;
-    const cacheFresh = newestCache && (Date.now() - newestCache) < CACHE_STALE_MS;
-    debug.cache = {
-      resultCount: cachedPlaces.length,
-      fresh: Boolean(cacheFresh),
-      newestCachedAt: cachedPlaces[0]?.cachedAt || null,
-      googleRatedCount: cachedPlaces.filter((place) => place.ratingSource === 'google' && Number.isFinite(place.rating)).length,
-    };
 
-    if (cachedPlaces.length >= MIN_CACHE_RESULTS && cacheFresh) {
-      let places = cachedPlaces.map((place) => place.toObject());
-      const hasGoogleRatings = places.some((place) => place.ratingSource === 'google' && Number.isFinite(place.rating));
-      if (!hasGoogleRatings && process.env.GOOGLE_PLACES_API_KEY) {
-        places = await enrichPlacesWithGoogleIfNeeded({
-          places,
-          lat,
-          lng,
-          radiusKm: radius,
-          debug,
-        });
-        await upsertPlaces(places);
-      }
+    let places = await fetchNearbyPlacesGoogle({
+      lat,
+      lng,
+      radiusKm: radius,
+      category: category || 'all',
+      debug,
+    });
+
+    if (places.length) {
+      await upsertPlaces(places);
       debug.final = {
-        source: 'mongo-cache',
+        source: 'google',
         returnedCount: places.length,
         ratedCount: places.filter((place) => Number.isFinite(place.rating)).length,
         googleRatedCount: places.filter((place) => place.ratingSource === 'google' && Number.isFinite(place.rating)).length,
       };
-      return res.json({ places, source: 'mongo-cache', debug });
+      return res.json({ places, source: 'google', debug });
     }
 
-    const provider = String(process.env.PLACES_PROVIDER || 'overpass').toLowerCase();
-    if (provider === 'overpass') {
-      try {
-        let places = await fetchNearbyPlacesOverpass({
-          lat,
-          lng,
-          radiusKm: radius,
-          category: category || 'all',
-          debug,
-        });
-        debug.overpassResultCount = places.length;
-
-        places = await enrichPlacesWithGoogleIfNeeded({
-          places,
-          lat,
-          lng,
-          radiusKm: radius,
-          debug,
-        });
-
-        await upsertPlaces(places);
-        const refreshedPlaces = await Place.find(mongoQuery).sort({ lastSeenAt: -1 }).limit(50);
-        const returnedPlaces = refreshedPlaces.length ? refreshedPlaces : places;
-        debug.final = {
-          source: refreshedPlaces.length ? 'mongo-after-overpass' : 'overpass',
-          returnedCount: returnedPlaces.length,
-          ratedCount: returnedPlaces.filter((place) => Number.isFinite(place.rating)).length,
-          googleRatedCount: returnedPlaces.filter((place) => place.ratingSource === 'google' && Number.isFinite(place.rating)).length,
-        };
-        return res.json({
-          places: returnedPlaces,
-          source: refreshedPlaces.length ? 'mongo-after-overpass' : 'overpass',
-          debug,
-        });
-      } catch (err) {
-        console.error('Overpass nearby search failed, falling back to Mongo:', err);
-        debug.overpassError = err.message;
-      }
-    }
-
+    const cachedPlaces = await Place.find(mongoQuery).sort({ lastSeenAt: -1 }).limit(50);
     debug.final = {
-      source: 'mongo-fallback',
+      source: 'mongo-fallback-after-google-empty',
       returnedCount: cachedPlaces.length,
       ratedCount: cachedPlaces.filter((place) => Number.isFinite(place.rating)).length,
       googleRatedCount: cachedPlaces.filter((place) => place.ratingSource === 'google' && Number.isFinite(place.rating)).length,
     };
-    return res.json({ places: cachedPlaces, source: 'mongo-fallback', debug });
+    return res.json({ places: cachedPlaces, source: 'mongo-fallback-after-google-empty', debug });
   } catch (err) {
     console.error(err);
     res.status(500).json({

@@ -2,8 +2,7 @@ import express from 'express';
 import Plan from '../models/Plan.js';
 import User from '../models/User.js';
 import Place from '../models/Place.js';
-import { fetchNearbyPlacesOverpass } from '../services/places/overpass.js';
-import { enrichPlacesWithGoogleIfNeeded } from '../services/places/googlePlaces.js';
+import { fetchNearbyPlacesGoogle } from '../services/places/googlePlaces.js';
 import {
   calculateCentroid,
   getCommonAvailability,
@@ -15,6 +14,7 @@ const router = express.Router();
 
 function buildPlacesNearQuery({ center, radius, category }) {
   const query = {
+    source: 'google',
     location: {
       $nearSphere: {
         $geometry: {
@@ -41,14 +41,45 @@ function normalizeCachedPlace(place) {
   };
 }
 
-function getErrorDetails(err) {
+function mapPlaceToDocument(place) {
   return {
-    message: err?.message || String(err),
-    name: err?.name || null,
-    code: err?.code || err?.cause?.code || null,
-    cause: err?.cause?.message || null,
-    causeCode: err?.cause?.code || null,
+    externalId: place.externalId || place._id,
+    source: place.source || 'google',
+    name: place.name,
+    category: place.category,
+    rating: place.rating ?? null,
+    ratingSource: place.ratingSource || null,
+    userRatingsTotal: place.userRatingsTotal ?? null,
+    googlePlaceId: place.googlePlaceId ?? null,
+    vicinity: place.vicinity,
+    openingHours: place.openingHours,
+    phone: place.phone,
+    website: place.website,
+    priceLevel: place.priceLevel,
+    openNow: place.openNow,
+    businessStatus: place.businessStatus,
+    location: {
+      type: 'Point',
+      coordinates: place.location?.coordinates || [],
+    },
+    cachedAt: new Date(),
+    lastSeenAt: new Date(),
   };
+}
+
+async function upsertPlaces(places) {
+  if (!places.length) return;
+
+  await Place.bulkWrite(
+    places.map((place) => ({
+      updateOne: {
+        filter: { externalId: place.externalId || place._id },
+        update: { $set: mapPlaceToDocument(place) },
+        upsert: true,
+      },
+    })),
+    { ordered: false }
+  );
 }
 
 // Create a new plan
@@ -179,6 +210,7 @@ router.get('/:id/recommendations', async (req, res) => {
       route: 'GET /plans/:id/recommendations',
       planId: req.params.id,
       query: { category, radius, minRating, priceLevel, openNow, travelMode },
+      provider: 'google',
       googleApiKeyPresent: Boolean(process.env.GOOGLE_PLACES_API_KEY),
       serverTime: new Date().toISOString(),
     };
@@ -197,40 +229,28 @@ router.get('/:id/recommendations', async (req, res) => {
     plan.midpoint = center;
     await plan.save();
 
-    let places = [];
-    let source = 'overpass';
-    try {
-      places = await fetchNearbyPlacesOverpass({
-        lat: center.latitude,
-        lng: center.longitude,
-        radiusKm: radius,
-        category,
-        debug,
-      });
-      debug.overpassResultCount = places.length;
-    } catch (providerErr) {
-      debug.providerError = getErrorDetails(providerErr);
-      debug.providerFallback = 'mongo-cache';
+    let places = await fetchNearbyPlacesGoogle({
+      lat: center.latitude,
+      lng: center.longitude,
+      radiusKm: radius,
+      category,
+      debug,
+    });
+    let source = 'google';
+
+    if (places.length) {
+      await upsertPlaces(places);
+    } else {
       const cachedPlaces = await Place.find(buildPlacesNearQuery({ center, radius, category }))
         .sort({ lastSeenAt: -1 })
         .limit(50);
       places = cachedPlaces.map(normalizeCachedPlace);
-      source = places.length ? 'mongo-fallback-after-provider-error' : 'empty-after-provider-error';
+      source = places.length ? 'mongo-fallback-after-google-empty' : 'empty-after-google-empty';
       debug.mongoFallback = {
         returnedCount: places.length,
         ratedCount: places.filter((place) => Number.isFinite(place.rating)).length,
         googleRatedCount: places.filter((place) => place.ratingSource === 'google' && Number.isFinite(place.rating)).length,
       };
-    }
-
-    if (places.length) {
-      await enrichPlacesWithGoogleIfNeeded({
-        places,
-        lat: center.latitude,
-        lng: center.longitude,
-        radiusKm: radius,
-        debug,
-      });
     }
 
     const recommendations = rankMeetingPlaces({
@@ -249,9 +269,7 @@ router.get('/:id/recommendations', async (req, res) => {
       source,
       ratingNote: debug.outputGoogleRatedPlaceCount > 0
         ? `Google ratings loaded for ${debug.outputGoogleRatedPlaceCount} place(s).`
-        : debug.providerError
-          ? 'Place provider failed, so cached places were used if available. Open debug to see the provider error.'
-          : 'No Google ratings matched these OSM places. Open the debug panel below to see why.',
+        : 'Google Places returned no rated places for this search. Open debug to see the exact Google response.',
       recommendations: recommendations.slice(0, 25),
       emergencyAlternatives: getEmergencyAlternatives(recommendations),
       availabilityMatches: getCommonAvailability(plan.members),

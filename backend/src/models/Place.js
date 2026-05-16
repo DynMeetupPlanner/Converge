@@ -2,7 +2,7 @@ import mongoose from 'mongoose';
 
 const placeSchema = new mongoose.Schema({
   externalId: { type: String, unique: true, sparse: true },
-  source: { type: String, default: 'overpass' },
+  source: { type: String, default: 'google' },
   name: { type: String, required: true },
   category: { type: String, enum: ['cafe', 'restaurant', 'park', 'mall', 'bar'], required: true },
   rating: { type: Number },
@@ -16,6 +16,8 @@ const placeSchema = new mongoose.Schema({
   cuisine: { type: String },
   wheelchair: { type: String },
   priceLevel: { type: String },
+  openNow: { type: Boolean },
+  businessStatus: { type: String },
   location: {
     type: { type: String, default: 'Point' },
     coordinates: [Number], // [lng, lat] — MongoDB order
