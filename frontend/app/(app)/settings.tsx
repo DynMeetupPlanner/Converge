@@ -75,7 +75,7 @@ const PRIVACY = [
   'You should only invite users you know and only share location when you are comfortable doing so.',
 ];
 
-const API_BASE = API_URL || 'https://sturdy-goggles-1033249426470.asia-south1.run.app';
+const API_BASE = API_URL || 'https://sturdy-goggles-123083387827.asia-south1.run.app';
 
 export default function SettingsScreen() {
   const { user, logout, updateUser } = useAuth();

@@ -16,7 +16,7 @@ import { usePlans } from '@/context/PlanContext';
 import { s, C } from '../../../tempStyles/PlanStyle';
 import { API_URL } from '@/lib/api';
 
-const API_BASE = API_URL || 'https://sturdy-goggles-1033249426470.asia-south1.run.app';
+const API_BASE = API_URL || 'https://sturdy-goggles-123083387827.asia-south1.run.app';
 
 export default function MyPlansScreen() {
   const { user } = useAuth();

@@ -50,7 +50,7 @@ export default function LoginScreen() {
     }
 
     try {
-      const res = await fetch('https://sturdy-goggles-1033249426470.asia-south1.run.app/Auth/login', {
+      const res = await fetch('https://sturdy-goggles-123083387827.asia-south1.run.app/Auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),

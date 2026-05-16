@@ -63,7 +63,7 @@ const REFETCH_THRESHOLD_KM = 2;
 const TOP_PLACE_LIMIT = 7;
 const DRIVING_SPEED_KMPH = 28;
 const ROAD_FACTOR = 1.35;
-const API_BASE = API_URL || 'https://sturdy-goggles-1033249426470.asia-south1.run.app';
+const API_BASE = API_URL || 'https://sturdy-goggles-123083387827.asia-south1.run.app';
 
 // Palette
 const C = {
