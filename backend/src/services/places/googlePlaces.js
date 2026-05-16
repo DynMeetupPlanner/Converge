@@ -10,6 +10,10 @@ const GOOGLE_TYPE_BY_CATEGORY = {
   bar: 'bar',
 };
 
+const CATEGORY_BY_GOOGLE_TYPE = Object.fromEntries(
+  Object.entries(GOOGLE_TYPE_BY_CATEGORY).map(([category, googleType]) => [googleType, category])
+);
+
 function clampRadiusMeters(radiusKm) {
   const meters = Number(radiusKm) * 1000;
   if (!Number.isFinite(meters)) return 5000;
@@ -142,6 +146,9 @@ async function fetchGoogleNearbyByType({ lat, lng, radiusKm, apiKey, googleType,
         rating: Number.isFinite(item.rating) ? item.rating : null,
         userRatingsTotal: Number.isFinite(item.user_ratings_total) ? item.user_ratings_total : null,
         priceLevel: Number.isFinite(item.price_level) ? item.price_level : null,
+        vicinity: item.vicinity,
+        openNow: typeof item.opening_hours?.open_now === 'boolean' ? item.opening_hours.open_now : null,
+        businessStatus: item.business_status,
       });
     }
 
@@ -151,6 +158,76 @@ async function fetchGoogleNearbyByType({ lat, lng, radiusKm, apiKey, googleType,
 
   nearbyCache.set(cacheKey, { at: Date.now(), value: results });
   return results;
+}
+
+function normalizeGooglePlace(item, category) {
+  return {
+    _id: `google-${item.placeId}`,
+    externalId: `google-${item.placeId}`,
+    source: 'google',
+    googlePlaceId: item.placeId,
+    name: item.name,
+    category,
+    rating: Number.isFinite(item.rating) ? item.rating : null,
+    ratingSource: Number.isFinite(item.rating) ? 'google' : null,
+    userRatingsTotal: Number.isFinite(item.userRatingsTotal) ? item.userRatingsTotal : null,
+    priceLevel: priceLevelToBucket(item.priceLevel),
+    vicinity: item.vicinity,
+    openNow: item.openNow,
+    businessStatus: item.businessStatus,
+    location: {
+      coordinates: [item.lng, item.lat],
+    },
+  };
+}
+
+export async function fetchNearbyPlacesGoogle({ lat, lng, radiusKm, category = 'all', debug }) {
+  const apiKey = process.env.GOOGLE_PLACES_API_KEY;
+  debug.googleEnabled = Boolean(apiKey);
+  debug.googleDirect = true;
+  debug.googleRequests = debug.googleRequests || [];
+  debug.googleErrors = debug.googleErrors || [];
+  debug.googleCategoryTypes = GOOGLE_TYPE_BY_CATEGORY;
+
+  if (!apiKey) {
+    debug.googleErrors.push('GOOGLE_PLACES_API_KEY is missing on backend');
+    return [];
+  }
+
+  const googleTypes = category && category !== 'all'
+    ? [GOOGLE_TYPE_BY_CATEGORY[category]].filter(Boolean)
+    : Object.values(GOOGLE_TYPE_BY_CATEGORY);
+
+  debug.categoriesRequested = category && category !== 'all'
+    ? [category]
+    : Object.keys(GOOGLE_TYPE_BY_CATEGORY);
+  debug.googleTypesRequested = googleTypes;
+
+  const byPlaceId = new Map();
+  for (const googleType of googleTypes) {
+    const candidates = await fetchGoogleNearbyByType({
+      lat,
+      lng,
+      radiusKm,
+      apiKey,
+      googleType,
+      debug,
+    });
+    const mappedCategory = CATEGORY_BY_GOOGLE_TYPE[googleType] || category || 'restaurant';
+
+    for (const candidate of candidates) {
+      if (!candidate.placeId) continue;
+      if (!byPlaceId.has(candidate.placeId)) {
+        byPlaceId.set(candidate.placeId, normalizeGooglePlace(candidate, mappedCategory));
+      }
+    }
+  }
+
+  const places = [...byPlaceId.values()];
+  debug.inputPlaceCount = places.length;
+  debug.outputRatedPlaceCount = places.filter((place) => Number.isFinite(place.rating)).length;
+  debug.outputGoogleRatedPlaceCount = places.filter((place) => place.ratingSource === 'google' && Number.isFinite(place.rating)).length;
+  return places;
 }
 
 function pickBestGoogleMatch(osmPlace, googleCandidates, debug) {
