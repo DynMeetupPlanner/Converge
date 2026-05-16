@@ -1,4 +1,8 @@
 const OVERPASS_URL = process.env.OVERPASS_URL || 'https://overpass-api.de/api/interpreter';
+const OVERPASS_URLS = (process.env.OVERPASS_URLS || OVERPASS_URL)
+  .split(',')
+  .map((url) => url.trim())
+  .filter(Boolean);
 const USER_AGENT = process.env.OSM_USER_AGENT || 'ConvergeApp/1.0';
 const CONTACT_EMAIL = process.env.OSM_CONTACT_EMAIL;
 
@@ -126,7 +130,7 @@ export async function fetchNearbyPlacesOverpass({ lat, lng, radiusKm, category =
   });
   if (debug) {
     debug.overpass = {
-      requestUrl: OVERPASS_URL,
+      requestUrls: OVERPASS_URLS,
       requestMethod: 'POST',
       radiusMeters,
       category: normalizedCategory,
@@ -136,19 +140,47 @@ export async function fetchNearbyPlacesOverpass({ lat, lng, radiusKm, category =
     };
   }
 
-  const response = await fetch(OVERPASS_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'text/plain;charset=UTF-8',
-      'User-Agent': USER_AGENT,
-      ...(CONTACT_EMAIL ? { 'From': CONTACT_EMAIL } : {}),
-      Accept: 'application/json',
-    },
-    body: query,
-  });
+  let response = null;
+  let lastError = null;
+  const attempts = [];
+
+  for (const url of OVERPASS_URLS) {
+    try {
+      const attempt = { requestUrl: url };
+      response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'text/plain;charset=UTF-8',
+          'User-Agent': USER_AGENT,
+          ...(CONTACT_EMAIL ? { 'From': CONTACT_EMAIL } : {}),
+          Accept: 'application/json',
+        },
+        body: query,
+      });
+      attempt.httpStatus = response.status;
+      attempt.ok = response.ok;
+      attempts.push(attempt);
+      if (response.ok) break;
+      lastError = new Error(`Overpass error ${response.status}`);
+    } catch (err) {
+      lastError = err;
+      attempts.push({
+        requestUrl: url,
+        error: err?.message || String(err),
+        code: err?.code || err?.cause?.code || null,
+        cause: err?.cause?.message || null,
+      });
+    }
+  }
+
   if (debug) {
-    debug.overpass.httpStatus = response.status;
-    debug.overpass.ok = response.ok;
+    debug.overpass.attempts = attempts;
+    debug.overpass.httpStatus = response?.status || null;
+    debug.overpass.ok = Boolean(response?.ok);
+  }
+
+  if (!response) {
+    throw lastError || new Error('Overpass request failed');
   }
 
   if (!response.ok) {

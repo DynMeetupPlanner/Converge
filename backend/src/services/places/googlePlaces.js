@@ -98,8 +98,8 @@ async function fetchGoogleNearbyByType({ lat, lng, radiusKm, apiKey, googleType,
       fromMemoryCache: false,
     };
 
-    // Note: Google may require a short delay before pagetoken becomes active.
-    if (pageToken) await new Promise((r) => setTimeout(r, 1800));
+    // Google next_page_token can take a moment to activate.
+    if (pageToken) await new Promise((r) => setTimeout(r, 2500));
 
     const response = await fetch(url, { headers: { Accept: 'application/json' } });
     const bodyText = await response.text();
@@ -118,6 +118,12 @@ async function fetchGoogleNearbyByType({ lat, lng, radiusKm, apiKey, googleType,
       ? data.results.filter((item) => Number.isFinite(item.rating)).length
       : 0;
     debug.googleRequests.push(requestDebug);
+
+    if (pageToken && data.status === 'INVALID_REQUEST') {
+      debug.googleWarnings = debug.googleWarnings || [];
+      debug.googleWarnings.push(`Google page ${page + 1} token was not ready; using earlier page results.`);
+      break;
+    }
 
     if (data.status && !['OK', 'ZERO_RESULTS'].includes(data.status)) {
       throw new Error(`Google Places ${googleType} status ${data.status}: ${data.error_message || 'no error message'}`);
