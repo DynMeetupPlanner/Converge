@@ -609,16 +609,6 @@ export default function PlanDetailScreen() {
             </View>
 
           </View>
-
-          {placesDebug ? (
-            <View style={s.card}>
-              <Text style={[s.label, { color: C.amber }]}>Places Debug</Text>
-              <Text style={[s.metaText, { fontFamily: 'monospace' }]}>
-                {JSON.stringify(placesDebug, null, 2)}
-              </Text>
-            </View>
-          ) : null}
-
           {availabilityMatches.length > 0 && (
             <View style={[s.card, { backgroundColor: C.greenSoft, borderColor: C.green + '44' }]}>
               <Text style={[s.userName, { color: C.green }]}>Common free time</Text>

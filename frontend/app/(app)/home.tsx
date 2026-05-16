@@ -391,7 +391,7 @@ export default function HomeScreen() {
       });
       const data = await res.json();
       if (res.ok) {
-        setSavedPlaces(data.places || []);
+        setSavedPlaces(data.places || [])
       }
     } catch (err) {
       console.error('Failed to save place:', err);
@@ -628,13 +628,7 @@ export default function HomeScreen() {
           <Text style={s.resultsCount}>Top {rankedPlaces.length} of {visiblePlaces.length}</Text>
         </View>
 
-        {placesDebug ? (
-          <View style={s.debugCard}>
-            <Text style={s.debugTitle}>Places Debug</Text>
-            <Text style={s.debugText}>{JSON.stringify(placesDebug, null, 2)}</Text>
-          </View>
-        ) : null}
-
+      
         {rankedPlaces.length === 0 ? (
           <View style={s.emptyCard}>
             <View style={s.emptyIcon}>

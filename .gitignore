@@ -36,3 +36,5 @@ yarn-error.*
 
 frontend/.expo/cache/eslint/.cache_6quzow
 backend/.env
+frontend/android
+frontend/ios
