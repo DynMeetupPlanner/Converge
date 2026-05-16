@@ -1,6 +1,7 @@
 import express from 'express';
 import Plan from '../models/Plan.js';
 import User from '../models/User.js';
+import Place from '../models/Place.js';
 import { fetchNearbyPlacesOverpass } from '../services/places/overpass.js';
 import { enrichPlacesWithGoogleIfNeeded } from '../services/places/googlePlaces.js';
 import {
@@ -11,6 +12,44 @@ import {
 } from '../services/places/meetingPlanner.js';
 
 const router = express.Router();
+
+function buildPlacesNearQuery({ center, radius, category }) {
+  const query = {
+    location: {
+      $nearSphere: {
+        $geometry: {
+          type: 'Point',
+          coordinates: [center.longitude, center.latitude],
+        },
+        $maxDistance: Number(radius) * 1000,
+      },
+    },
+  };
+
+  if (category && category !== 'all') query.category = category;
+  return query;
+}
+
+function normalizeCachedPlace(place) {
+  const plain = typeof place.toObject === 'function' ? place.toObject() : place;
+  return {
+    ...plain,
+    _id: plain.externalId || String(plain._id),
+    location: {
+      coordinates: plain.location?.coordinates || [],
+    },
+  };
+}
+
+function getErrorDetails(err) {
+  return {
+    message: err?.message || String(err),
+    name: err?.name || null,
+    code: err?.code || err?.cause?.code || null,
+    cause: err?.cause?.message || null,
+    causeCode: err?.cause?.code || null,
+  };
+}
 
 // Create a new plan
 router.post('/', async (req, res) => {
@@ -158,21 +197,41 @@ router.get('/:id/recommendations', async (req, res) => {
     plan.midpoint = center;
     await plan.save();
 
-    const places = await fetchNearbyPlacesOverpass({
-      lat: center.latitude,
-      lng: center.longitude,
-      radiusKm: radius,
-      category,
-    });
-    debug.overpassResultCount = places.length;
+    let places = [];
+    let source = 'overpass';
+    try {
+      places = await fetchNearbyPlacesOverpass({
+        lat: center.latitude,
+        lng: center.longitude,
+        radiusKm: radius,
+        category,
+        debug,
+      });
+      debug.overpassResultCount = places.length;
+    } catch (providerErr) {
+      debug.providerError = getErrorDetails(providerErr);
+      debug.providerFallback = 'mongo-cache';
+      const cachedPlaces = await Place.find(buildPlacesNearQuery({ center, radius, category }))
+        .sort({ lastSeenAt: -1 })
+        .limit(50);
+      places = cachedPlaces.map(normalizeCachedPlace);
+      source = places.length ? 'mongo-fallback-after-provider-error' : 'empty-after-provider-error';
+      debug.mongoFallback = {
+        returnedCount: places.length,
+        ratedCount: places.filter((place) => Number.isFinite(place.rating)).length,
+        googleRatedCount: places.filter((place) => place.ratingSource === 'google' && Number.isFinite(place.rating)).length,
+      };
+    }
 
-    await enrichPlacesWithGoogleIfNeeded({
-      places,
-      lat: center.latitude,
-      lng: center.longitude,
-      radiusKm: radius,
-      debug,
-    });
+    if (places.length) {
+      await enrichPlacesWithGoogleIfNeeded({
+        places,
+        lat: center.latitude,
+        lng: center.longitude,
+        radiusKm: radius,
+        debug,
+      });
+    }
 
     const recommendations = rankMeetingPlaces({
       plan,
@@ -187,10 +246,12 @@ router.get('/:id/recommendations', async (req, res) => {
 
     res.json({
       center,
-      source: 'overpass',
+      source,
       ratingNote: debug.outputGoogleRatedPlaceCount > 0
         ? `Google ratings loaded for ${debug.outputGoogleRatedPlaceCount} place(s).`
-        : 'No Google ratings matched these OSM places. Open the debug panel below to see why.',
+        : debug.providerError
+          ? 'Place provider failed, so cached places were used if available. Open debug to see the provider error.'
+          : 'No Google ratings matched these OSM places. Open the debug panel below to see why.',
       recommendations: recommendations.slice(0, 25),
       emergencyAlternatives: getEmergencyAlternatives(recommendations),
       availabilityMatches: getCommonAvailability(plan.members),

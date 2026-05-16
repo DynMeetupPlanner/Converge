@@ -107,7 +107,7 @@ function buildOverpassQuery({ lat, lng, radiusMeters, category }) {
   `;
 }
 
-export async function fetchNearbyPlacesOverpass({ lat, lng, radiusKm, category = 'all' }) {
+export async function fetchNearbyPlacesOverpass({ lat, lng, radiusKm, category = 'all', debug }) {
   const latitude = Number(lat);
   const longitude = Number(lng);
   const radiusMeters = clampRadiusMeters(radiusKm);
@@ -124,6 +124,17 @@ export async function fetchNearbyPlacesOverpass({ lat, lng, radiusKm, category =
     radiusMeters,
     category: normalizedCategory,
   });
+  if (debug) {
+    debug.overpass = {
+      requestUrl: OVERPASS_URL,
+      requestMethod: 'POST',
+      radiusMeters,
+      category: normalizedCategory,
+      userAgent: USER_AGENT,
+      contactEmailPresent: Boolean(CONTACT_EMAIL),
+      query,
+    };
+  }
 
   const response = await fetch(OVERPASS_URL, {
     method: 'POST',
@@ -135,14 +146,22 @@ export async function fetchNearbyPlacesOverpass({ lat, lng, radiusKm, category =
     },
     body: query,
   });
+  if (debug) {
+    debug.overpass.httpStatus = response.status;
+    debug.overpass.ok = response.ok;
+  }
 
   if (!response.ok) {
     const body = await response.text();
+    if (debug) debug.overpass.errorBody = body.slice(0, 500);
     throw new Error(`Overpass error ${response.status}: ${body.slice(0, 300)}`);
   }
 
   const data = await response.json();
   const elements = Array.isArray(data.elements) ? data.elements : [];
+  if (debug) {
+    debug.overpass.elementCount = elements.length;
+  }
 
   const seen = new Set();
   const places = [];
@@ -159,5 +178,8 @@ export async function fetchNearbyPlacesOverpass({ lat, lng, radiusKm, category =
     places.push(place);
   }
 
+  if (debug) {
+    debug.overpass.placeCount = places.length;
+  }
   return places;
 }

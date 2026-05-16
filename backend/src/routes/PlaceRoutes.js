@@ -122,6 +122,7 @@ router.get('/nearby', async (req, res) => {
           lng,
           radiusKm: radius,
           category: category || 'all',
+          debug,
         });
         debug.overpassResultCount = places.length;
 
