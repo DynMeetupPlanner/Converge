@@ -10,7 +10,7 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { usePlans } from '@/context/PlanContext';
 import { s, C } from '../../../tempStyles/PlanStyle';
@@ -45,6 +45,12 @@ export default function MyPlansScreen() {
   useEffect(() => {
     fetchPlans();
   }, [fetchPlans]);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchPlans();
+    }, [fetchPlans])
+  );
 
   const onRefresh = () => {
     setRefreshing(true);

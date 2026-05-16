@@ -210,6 +210,36 @@ router.get('/friends', async (req, res) => {
   }
 });
 
+router.delete('/friends/:friendId', async (req, res) => {
+  try {
+    const rawUserId = Array.isArray(req.query.userId) ? req.query.userId[0] : req.query.userId;
+    const userId = String(rawUserId || '').trim();
+    const friendId = String(req.params.friendId || '').trim();
+    if (!userId || !friendId) return res.status(400).json({ msg: 'userId and friendId required' });
+
+    const [user, friend] = await Promise.all([
+      User.findById(userId),
+      User.findById(friendId),
+    ]);
+    if (!user || !friend) return res.status(404).json({ msg: 'User not found' });
+
+    user.friends = (user.friends || []).filter((id) => String(id) !== String(friend._id));
+    friend.friends = (friend.friends || []).filter((id) => String(id) !== String(user._id));
+
+    await Promise.all([user.save(), friend.save()]);
+
+    const friends = await User.find({ _id: { $in: user.friends || [] } })
+      .select('name username email _id')
+      .sort({ name: 1 })
+      .lean();
+
+    res.json({ msg: 'Friend removed', friends: friends.map(toPublicUser) });
+  } catch (err) {
+    console.error('Remove friend error:', err);
+    res.status(500).json({ msg: 'Remove friend failed' });
+  }
+});
+
 router.get('/requests', async (req, res) => {
   try {
     const rawUserId = Array.isArray(req.query.userId) ? req.query.userId[0] : req.query.userId;

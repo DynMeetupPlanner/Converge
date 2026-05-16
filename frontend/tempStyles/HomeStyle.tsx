@@ -349,6 +349,28 @@ export const s = StyleSheet.create({
     color: C.textMuted,
     fontWeight: '600',
   },
+  debugCard: {
+    backgroundColor: C.surface,
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 14,
+  },
+  debugTitle: {
+    fontSize: 11,
+    color: C.amber,
+    fontWeight: '800',
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+    marginBottom: 8,
+  },
+  debugText: {
+    fontSize: 10,
+    color: C.textSub,
+    lineHeight: 15,
+    fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' }),
+  },
 
   // Empty
   emptyCard: {

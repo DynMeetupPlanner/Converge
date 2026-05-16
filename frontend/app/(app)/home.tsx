@@ -33,6 +33,7 @@ type SavedPlace = {
   placeId: string;
   status: 'saved' | 'visited';
 };
+type PlacesDebug = Record<string, unknown> | null;
 type TravelEstimate = {
   personId: number;
   name: string;
@@ -223,6 +224,7 @@ export default function HomeScreen() {
   const [savedPlaces, setSavedPlaces] = useState<SavedPlace[]>([]);
   const [hasChosenCategory, setHasChosenCategory] = useState(false);
   const [expandedPlaceId, setExpandedPlaceId] = useState<string | null>(null);
+  const [placesDebug, setPlacesDebug] = useState<PlacesDebug>(null);
 
   const lastFetchCoords = useRef<Coords | null>(null);
   const lastFetchCategory = useRef<Category | null>(null);
@@ -277,15 +279,34 @@ export default function HomeScreen() {
     lastFetchCoords.current = coords;
     lastFetchCategory.current = selectedCategory;
     try {
-      const res = await fetch(
-        `${API_BASE}/places/nearby?lat=${coords.latitude}&lng=${coords.longitude}&radius=${FETCH_RADIUS_KM}&category=${encodeURIComponent(selectedCategory)}`
-      );
+      const placesUrl = `${API_BASE}/places/nearby?lat=${coords.latitude}&lng=${coords.longitude}&radius=${FETCH_RADIUS_KM}&category=${encodeURIComponent(selectedCategory)}`;
+      setPlacesDebug({
+        frontendRequestUrl: placesUrl,
+        status: 'requesting',
+        requestedAt: new Date().toISOString(),
+      });
+      const res = await fetch(placesUrl);
       const data = await res.json();
       if (requestId === fetchRequestId.current) {
         setAllPlaces(data.places ?? []);
+        setPlacesDebug({
+          frontendRequestUrl: placesUrl,
+          responseStatus: res.status,
+          responseOk: res.ok,
+          source: data.source,
+          placeCount: data.places?.length || 0,
+          ratedCount: (data.places || []).filter((place: PlaceResult) => Number.isFinite(place.rating)).length,
+          backendDebug: data.debug || null,
+          message: data.msg || null,
+        });
       }
     } catch (e) {
       console.error('Failed to fetch places:', e);
+      setPlacesDebug({
+        status: 'network-error',
+        error: e instanceof Error ? e.message : String(e),
+        apiBase: API_BASE,
+      });
     } finally {
       if (requestId === fetchRequestId.current) {
         isFetching.current = false;
@@ -606,6 +627,13 @@ export default function HomeScreen() {
           <Text style={s.sectionLabel}>NEARBY SPOTS</Text>
           <Text style={s.resultsCount}>Top {rankedPlaces.length} of {visiblePlaces.length}</Text>
         </View>
+
+        {placesDebug ? (
+          <View style={s.debugCard}>
+            <Text style={s.debugTitle}>Places Debug</Text>
+            <Text style={s.debugText}>{JSON.stringify(placesDebug, null, 2)}</Text>
+          </View>
+        ) : null}
 
         {rankedPlaces.length === 0 ? (
           <View style={s.emptyCard}>

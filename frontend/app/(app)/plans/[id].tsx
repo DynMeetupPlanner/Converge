@@ -30,6 +30,7 @@ type TravelMode = typeof TRAVEL_MODES[number];
 type AvailabilitySlot = { day: string; startTime: string; endTime: string };
 type SavedPlace = { placeId: string; status: 'saved' | 'visited' };
 type PlanVote = { placeId: string; userId: string };
+type PlacesDebug = Record<string, unknown> | null;
 type Recommendation = {
   placeId: string;
   name: string;
@@ -108,6 +109,7 @@ export default function PlanDetailScreen() {
   const [hasChosenPreference, setHasChosenPreference] = useState(false);
   const [hasChosenCategoryFilter, setHasChosenCategoryFilter] = useState(false);
   const [expandedPlaceId, setExpandedPlaceId] = useState<string | null>(null);
+  const [placesDebug, setPlacesDebug] = useState<PlacesDebug>(null);
 
   useEffect(() => {
     activePlanIdRef.current = planIdString;
@@ -119,6 +121,7 @@ export default function PlanDetailScreen() {
     setAvailabilityMatches([]);
     setRecommendationLoading(false);
     setRecommendationNote('');
+    setPlacesDebug(null);
     setExpandedPlaceId(null);
   }, [planIdString, setCurrentPlan]);
 
@@ -234,9 +237,25 @@ export default function PlanDetailScreen() {
         openNow: String(openNowOnly),
         travelMode,
       });
-      const res = await fetch(`${API_BASE}/plans/${planIdString}/recommendations?${params.toString()}`);
+      const recommendationUrl = `${API_BASE}/plans/${planIdString}/recommendations?${params.toString()}`;
+      setPlacesDebug({
+        frontendRequestUrl: recommendationUrl,
+        status: 'requesting',
+        requestedAt: new Date().toISOString(),
+      });
+      const res = await fetch(recommendationUrl);
       const data = await res.json();
       if (activePlanIdRef.current !== planIdString) return;
+      setPlacesDebug({
+        frontendRequestUrl: recommendationUrl,
+        responseStatus: res.status,
+        responseOk: res.ok,
+        recommendationCount: data.recommendations?.length || 0,
+        ratedCount: (data.recommendations || []).filter((place: Recommendation) => Number.isFinite(place.rating)).length,
+        ratingNote: data.ratingNote || null,
+        backendDebug: data.debug || null,
+        message: data.msg || null,
+      });
       if (!res.ok) {
         setRecommendationNote(data.msg || 'Could not load recommendations');
         return;
@@ -253,6 +272,11 @@ export default function PlanDetailScreen() {
       console.error('Recommendation error:', err);
       if (activePlanIdRef.current === planIdString) {
         setRecommendationNote('Could not load smart recommendations');
+        setPlacesDebug({
+          status: 'network-error',
+          error: err instanceof Error ? err.message : String(err),
+          apiBase: API_BASE,
+        });
       }
     } finally {
       if (activePlanIdRef.current === planIdString) {
@@ -585,6 +609,15 @@ export default function PlanDetailScreen() {
             </View>
 
           </View>
+
+          {placesDebug ? (
+            <View style={s.card}>
+              <Text style={[s.label, { color: C.amber }]}>Places Debug</Text>
+              <Text style={[s.metaText, { fontFamily: 'monospace' }]}>
+                {JSON.stringify(placesDebug, null, 2)}
+              </Text>
+            </View>
+          ) : null}
 
           {availabilityMatches.length > 0 && (
             <View style={[s.card, { backgroundColor: C.greenSoft, borderColor: C.green + '44' }]}>

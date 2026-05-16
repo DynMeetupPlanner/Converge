@@ -73,10 +73,24 @@ async function upsertPlaces(places) {
 router.get('/nearby', async (req, res) => {
   try {
     const { lat, lng, radius = 5, category } = req.query;
+    const debug = {
+      route: 'GET /places/nearby',
+      query: { lat, lng, radius, category: category || 'all' },
+      provider: String(process.env.PLACES_PROVIDER || 'overpass').toLowerCase(),
+      googleApiKeyPresent: Boolean(process.env.GOOGLE_PLACES_API_KEY),
+      cache: {},
+      serverTime: new Date().toISOString(),
+    };
     const mongoQuery = buildMongoQuery({ lat, lng, radius, category });
     const cachedPlaces = await Place.find(mongoQuery).sort({ lastSeenAt: -1 }).limit(50);
     const newestCache = cachedPlaces[0]?.cachedAt ? new Date(cachedPlaces[0].cachedAt).getTime() : 0;
     const cacheFresh = newestCache && (Date.now() - newestCache) < CACHE_STALE_MS;
+    debug.cache = {
+      resultCount: cachedPlaces.length,
+      fresh: Boolean(cacheFresh),
+      newestCachedAt: cachedPlaces[0]?.cachedAt || null,
+      googleRatedCount: cachedPlaces.filter((place) => place.ratingSource === 'google' && Number.isFinite(place.rating)).length,
+    };
 
     if (cachedPlaces.length >= MIN_CACHE_RESULTS && cacheFresh) {
       let places = cachedPlaces.map((place) => place.toObject());
@@ -87,10 +101,17 @@ router.get('/nearby', async (req, res) => {
           lat,
           lng,
           radiusKm: radius,
+          debug,
         });
         await upsertPlaces(places);
       }
-      return res.json({ places, source: 'mongo-cache' });
+      debug.final = {
+        source: 'mongo-cache',
+        returnedCount: places.length,
+        ratedCount: places.filter((place) => Number.isFinite(place.rating)).length,
+        googleRatedCount: places.filter((place) => place.ratingSource === 'google' && Number.isFinite(place.rating)).length,
+      };
+      return res.json({ places, source: 'mongo-cache', debug });
     }
 
     const provider = String(process.env.PLACES_PROVIDER || 'overpass').toLowerCase();
@@ -102,29 +123,53 @@ router.get('/nearby', async (req, res) => {
           radiusKm: radius,
           category: category || 'all',
         });
+        debug.overpassResultCount = places.length;
 
         places = await enrichPlacesWithGoogleIfNeeded({
           places,
           lat,
           lng,
           radiusKm: radius,
+          debug,
         });
 
         await upsertPlaces(places);
         const refreshedPlaces = await Place.find(mongoQuery).sort({ lastSeenAt: -1 }).limit(50);
-        return res.json({
-          places: refreshedPlaces.length ? refreshedPlaces : places,
+        const returnedPlaces = refreshedPlaces.length ? refreshedPlaces : places;
+        debug.final = {
           source: refreshedPlaces.length ? 'mongo-after-overpass' : 'overpass',
+          returnedCount: returnedPlaces.length,
+          ratedCount: returnedPlaces.filter((place) => Number.isFinite(place.rating)).length,
+          googleRatedCount: returnedPlaces.filter((place) => place.ratingSource === 'google' && Number.isFinite(place.rating)).length,
+        };
+        return res.json({
+          places: returnedPlaces,
+          source: refreshedPlaces.length ? 'mongo-after-overpass' : 'overpass',
+          debug,
         });
       } catch (err) {
         console.error('Overpass nearby search failed, falling back to Mongo:', err);
+        debug.overpassError = err.message;
       }
     }
 
-    return res.json({ places: cachedPlaces, source: 'mongo-fallback' });
+    debug.final = {
+      source: 'mongo-fallback',
+      returnedCount: cachedPlaces.length,
+      ratedCount: cachedPlaces.filter((place) => Number.isFinite(place.rating)).length,
+      googleRatedCount: cachedPlaces.filter((place) => place.ratingSource === 'google' && Number.isFinite(place.rating)).length,
+    };
+    return res.json({ places: cachedPlaces, source: 'mongo-fallback', debug });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ msg: 'Server error' });
+    res.status(500).json({
+      msg: 'Server error',
+      debug: {
+        route: 'GET /places/nearby',
+        error: err.message,
+        serverTime: new Date().toISOString(),
+      },
+    });
   }
 });
 

@@ -136,6 +136,13 @@ router.get('/:id/recommendations', async (req, res) => {
       openNow,
       travelMode,
     } = req.query;
+    const debug = {
+      route: 'GET /plans/:id/recommendations',
+      planId: req.params.id,
+      query: { category, radius, minRating, priceLevel, openNow, travelMode },
+      googleApiKeyPresent: Boolean(process.env.GOOGLE_PLACES_API_KEY),
+      serverTime: new Date().toISOString(),
+    };
 
     const plan = await Plan.findById(req.params.id);
     if (!plan) return res.status(404).json({ msg: 'Plan not found' });
@@ -157,12 +164,14 @@ router.get('/:id/recommendations', async (req, res) => {
       radiusKm: radius,
       category,
     });
+    debug.overpassResultCount = places.length;
 
     await enrichPlacesWithGoogleIfNeeded({
       places,
       lat: center.latitude,
       lng: center.longitude,
       radiusKm: radius,
+      debug,
     });
 
     const recommendations = rankMeetingPlaces({
@@ -179,14 +188,33 @@ router.get('/:id/recommendations', async (req, res) => {
     res.json({
       center,
       source: 'overpass',
-      ratingNote: 'OpenStreetMap/Overpass does not provide public crowd ratings. Ratings are shown only when an optional provider supplies them.',
+      ratingNote: debug.outputGoogleRatedPlaceCount > 0
+        ? `Google ratings loaded for ${debug.outputGoogleRatedPlaceCount} place(s).`
+        : 'No Google ratings matched these OSM places. Open the debug panel below to see why.',
       recommendations: recommendations.slice(0, 25),
       emergencyAlternatives: getEmergencyAlternatives(recommendations),
       availabilityMatches: getCommonAvailability(plan.members),
+      debug: {
+        ...debug,
+        final: {
+          recommendationCount: recommendations.length,
+          returnedCount: Math.min(recommendations.length, 25),
+          ratedCount: recommendations.filter((place) => Number.isFinite(place.rating)).length,
+          googleRatedCount: recommendations.filter((place) => place.ratingSource === 'google' && Number.isFinite(place.rating)).length,
+        },
+      },
     });
   } catch (err) {
     console.error('Recommendation error:', err);
-    res.status(500).json({ msg: 'Server error' });
+    res.status(500).json({
+      msg: 'Server error',
+      debug: {
+        route: 'GET /plans/:id/recommendations',
+        planId: req.params.id,
+        error: err.message,
+        serverTime: new Date().toISOString(),
+      },
+    });
   }
 });
 
