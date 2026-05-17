@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   View,
@@ -110,6 +110,18 @@ export default function PlanDetailScreen() {
   const [hasChosenCategoryFilter, setHasChosenCategoryFilter] = useState(false);
   const [expandedPlaceId, setExpandedPlaceId] = useState<string | null>(null);
   const [placesDebug, setPlacesDebug] = useState<PlacesDebug>(null);
+  const visibleRecommendations = useMemo(
+    () => (categoryFilter === 'all'
+      ? recommendations
+      : recommendations.filter((place) => place.category === categoryFilter)),
+    [categoryFilter, recommendations]
+  );
+  const visibleEmergencyAlternatives = useMemo(
+    () => (categoryFilter === 'all'
+      ? emergencyAlternatives
+      : emergencyAlternatives.filter((place) => place.category === categoryFilter)),
+    [categoryFilter, emergencyAlternatives]
+  );
 
   useEffect(() => {
     activePlanIdRef.current = planIdString;
@@ -230,7 +242,7 @@ export default function PlanDetailScreen() {
     setRecommendationLoading(true);
     try {
       const params = new URLSearchParams({
-        category: categoryFilter,
+        category: 'all',
         radius: '5',
         minRating: '0',
         priceLevel,
@@ -283,13 +295,13 @@ export default function PlanDetailScreen() {
         setRecommendationLoading(false);
       }
     }
-  }, [categoryFilter, currentPlan?._id, currentPlan?.members, openNowOnly, planIdString, priceLevel, travelMode]);
+  }, [currentPlan?._id, currentPlan?.members, openNowOnly, planIdString, priceLevel, travelMode]);
 
   useEffect(() => {
     if (String(currentPlan?._id) === planIdString && (currentPlan?.members?.filter(m => m.location).length || 0) >= 2) {
       fetchRecommendations();
     }
-  }, [currentPlan?._id, currentPlan?.members?.length, fetchRecommendations, planIdString]);
+  }, [currentPlan?._id, currentPlan?.members, currentPlan?.members?.length, fetchRecommendations, planIdString]);
 
   const applyVotesToRecommendations = (votes: PlanVote[] = []) => {
     setRecommendations((current) => current.map((place) => {
@@ -426,7 +438,7 @@ export default function PlanDetailScreen() {
                   pinColor={C.green}
                 />
               ))}
-              {recommendations
+              {visibleRecommendations
                 .filter(place => Number.isFinite(place.location?.latitude) && Number.isFinite(place.location?.longitude))
                 .map(place => (
                   <Marker
@@ -622,12 +634,16 @@ export default function PlanDetailScreen() {
 
           {recommendationLoading ? (
             <ActivityIndicator color={C.accent} style={{ marginVertical: 18 }} />
-          ) : recommendations.length === 0 ? (
+          ) : visibleRecommendations.length === 0 ? (
             <View style={s.emptyCard}>
               <Ionicons name="analytics-outline" size={26} color={C.textMuted} />
-              <Text style={s.emptyText}>Share at least two locations to rank fair meeting spots.</Text>
+              <Text style={s.emptyText}>
+                {recommendations.length > 0
+                  ? `No ${categoryFilter} spots in the current results.`
+                  : 'Share at least two locations to rank fair meeting spots.'}
+              </Text>
             </View>
-          ) : recommendations.map((place, index) => {
+          ) : visibleRecommendations.map((place, index) => {
             const hasVoted = place.votedBy?.some(voter => String(voter) === String(user?.id));
             const allTravel = place.travelTimes || [];
             const savedState = savedPlaces.find((saved) => saved.placeId === place.placeId);
@@ -720,10 +736,10 @@ export default function PlanDetailScreen() {
             );
           })}
 
-          {emergencyAlternatives.length > 0 && (
+          {visibleEmergencyAlternatives.length > 0 && (
             <View>
               <Text style={s.sectionTitle}>Backup Options</Text>
-              {emergencyAlternatives.map(place => (
+              {visibleEmergencyAlternatives.map(place => (
                 <TouchableOpacity key={`backup-${place.placeId}`} style={s.userItem} onPress={() => openLink(place.links.maps)}>
                   <View style={s.avatar}>
                     <Ionicons name="trail-sign-outline" size={18} color={C.accent} />

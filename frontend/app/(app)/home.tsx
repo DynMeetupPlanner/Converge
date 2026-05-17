@@ -241,7 +241,6 @@ export default function HomeScreen() {
   const [placesDebug, setPlacesDebug] = useState<PlacesDebug>(null);
 
   const lastFetchCoords = useRef<Coords | null>(null);
-  const lastFetchCategory = useRef<Category | null>(null);
   const isFetching = useRef(false);
   const fetchRequestId = useRef(0);
   const mapRef = useRef<MapView>(null);
@@ -286,14 +285,13 @@ export default function HomeScreen() {
     fetchSavedPlaces();
   }, [user?.id]);
 
-  const fetchPlaces = async (coords: Coords, selectedCategory: Category = category) => {
+  const fetchPlaces = async (coords: Coords) => {
     const requestId = fetchRequestId.current + 1;
     fetchRequestId.current = requestId;
     isFetching.current = true;
     lastFetchCoords.current = coords;
-    lastFetchCategory.current = selectedCategory;
     try {
-      const placesUrl = `${API_BASE}/places/nearby?lat=${coords.latitude}&lng=${coords.longitude}&radius=${FETCH_RADIUS_KM}&category=${encodeURIComponent(selectedCategory)}`;
+      const placesUrl = `${API_BASE}/places/nearby?lat=${coords.latitude}&lng=${coords.longitude}&radius=${FETCH_RADIUS_KM}&category=all`;
       setPlacesDebug({
         frontendRequestUrl: placesUrl,
         status: 'requesting',
@@ -328,11 +326,6 @@ export default function HomeScreen() {
     }
   };
 
-  useEffect(() => {
-    if (!midpoint || lastFetchCategory.current === category) return;
-    fetchPlaces(midpoint, category);
-  }, [category, midpoint]);
-
   const handleSearch = async () => {
     setLoading(true);
     setLocationError('');
@@ -358,7 +351,7 @@ export default function HomeScreen() {
       setMidpoint(mid);
       mapRef.current?.animateToRegion({ ...mid, latitudeDelta: 0.05, longitudeDelta: 0.05 }, 800);
       const shouldFetch = !lastFetchCoords.current || haversine(lastFetchCoords.current, mid) >= REFETCH_THRESHOLD_KM;
-      if (shouldFetch || lastFetchCategory.current !== category) await fetchPlaces(mid, category);
+      if (shouldFetch) await fetchPlaces(mid);
     } finally {
       setLoading(false);
     }
