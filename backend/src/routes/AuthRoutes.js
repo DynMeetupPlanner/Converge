@@ -1,8 +1,26 @@
 import express from 'express';
 import bcrypt from "bcryptjs";
+import crypto from 'crypto';
 import User from '../models/User.js';
+import { sendPasswordResetOtpEmail } from '../services/email/resend.js';
 
 const router = express.Router();
+const PASSWORD_RESET_OTP_TTL_MS = 10 * 60 * 1000;
+const PASSWORD_RESET_OTP_DIGITS = 6;
+
+function generateNumericOtp() {
+  const min = 10 ** (PASSWORD_RESET_OTP_DIGITS - 1);
+  const max = (10 ** PASSWORD_RESET_OTP_DIGITS) - 1;
+  return String(Math.floor(min + Math.random() * (max - min + 1)));
+}
+
+function hashOtpForUser(userId, otp) {
+  return crypto.createHash('sha256').update(`${String(userId)}:${String(otp)}`).digest('hex');
+}
+
+function isStrongPassword(password) {
+  return typeof password === 'string' && password.length >= 8;
+}
 
 function toPublicUser(userDoc) {
   return {
@@ -119,40 +137,59 @@ router.put('/update', async (req, res) => {
 
 router.post('/forgot-password', async (req, res) => {
   try {
-    const { email } = req.body;
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    if (!email) return res.status(400).json({ msg: 'Email required' });
+
     const user = await User.findOne({ email });
-    if (!user) return res.status(404).json({ msg: 'User not found' });
+    if (user) {
+      const otp = generateNumericOtp();
+      user.resetPasswordOTPHash = hashOtpForUser(user._id, otp);
+      user.resetPasswordExpires = new Date(Date.now() + PASSWORD_RESET_OTP_TTL_MS);
+      await user.save();
+      await sendPasswordResetOtpEmail({
+        to: user.email,
+        otp,
+        name: user.name,
+        expiresMinutes: Math.round(PASSWORD_RESET_OTP_TTL_MS / 60000),
+      });
+    }
 
-    // Generate 6-digit OTP
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    user.resetPasswordOTP = otp;
-    user.resetPasswordExpires = Date.now() + 600000; // 10 minutes
-    await user.save();
-
-    // MOCK EMAIL SENDING
-    console.log(`[OTP SENT TO ${email}]: ${otp}`);
-    
-    res.status(200).json({ msg: 'OTP sent to your email' });
+    res.status(200).json({ msg: 'If an account exists for this email, a reset code has been sent' });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ msg: 'Server error' });
+    console.error('Forgot password error:', err);
+    res.status(500).json({ msg: 'Unable to send reset code right now. Please try again.' });
   }
 });
 
 router.post('/reset-password', async (req, res) => {
   try {
     const { email, otp, newPassword } = req.body;
-    const user = await User.findOne({ 
-      email, 
-      resetPasswordOTP: otp,
-      resetPasswordExpires: { $gt: Date.now() }
-    });
+    const normalizedEmail = String(email || '').trim().toLowerCase();
+    const normalizedOtp = String(otp || '').trim();
 
-    if (!user) return res.status(400).json({ msg: 'Invalid or expired OTP' });
+    if (!normalizedEmail || !normalizedOtp || !newPassword) {
+      return res.status(400).json({ msg: 'Email, OTP, and new password are required' });
+    }
+    if (!isStrongPassword(newPassword)) {
+      return res.status(400).json({ msg: 'Password must be at least 8 characters' });
+    }
+
+    const user = await User.findOne({ email: normalizedEmail });
+    if (!user || !user.resetPasswordOTPHash || !user.resetPasswordExpires) {
+      return res.status(400).json({ msg: 'Invalid or expired OTP' });
+    }
+    if (new Date(user.resetPasswordExpires).getTime() <= Date.now()) {
+      return res.status(400).json({ msg: 'Invalid or expired OTP' });
+    }
+
+    const inputHash = hashOtpForUser(user._id, normalizedOtp);
+    if (inputHash !== user.resetPasswordOTPHash) {
+      return res.status(400).json({ msg: 'Invalid or expired OTP' });
+    }
 
     const passwordHash = await bcrypt.hash(newPassword, 10);
     user.passwordHash = passwordHash;
-    user.resetPasswordOTP = undefined;
+    user.resetPasswordOTPHash = undefined;
     user.resetPasswordExpires = undefined;
     await user.save();
 
