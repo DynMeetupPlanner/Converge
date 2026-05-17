@@ -9,7 +9,8 @@ import {
   ActivityIndicator,
   Linking,
 } from 'react-native';
-import MapView, { Marker, Circle, Region } from 'react-native-maps';
+import MapView, { Marker, Circle } from 'react-native-maps';
+import type { Region } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 import { s } from '../../tempStyles/HomeStyle';
@@ -52,14 +53,14 @@ type RankedPlace = PlaceResult & {
   reason: string;
 };
 
-const CATEGORY_LABELS: Record<Category, { label: string; icon: string }> = {
-  all:        { label: 'All',        icon: 'apps' },
-  cafe:       { label: 'Café',       icon: 'cafe' },
-  restaurant: { label: 'Dine',       icon: 'restaurant' },
-  park:       { label: 'Park',       icon: 'leaf' },
-  mall:       { label: 'Mall',       icon: 'storefront' },
-  bar:        { label: 'Bar',        icon: 'wine' },
-};
+const CATEGORY_OPTIONS: { key: Category; label: string; icon: string }[] = [
+  { key: 'all', label: 'All', icon: 'apps' },
+  { key: 'cafe', label: 'Café', icon: 'cafe' },
+  { key: 'restaurant', label: 'Dine', icon: 'restaurant' },
+  { key: 'park', label: 'Park', icon: 'leaf' },
+  { key: 'mall', label: 'Mall', icon: 'storefront' },
+  { key: 'bar', label: 'Bar', icon: 'wine' },
+];
 
 const FETCH_RADIUS_KM = 5;
 const REFETCH_THRESHOLD_KM = 2;
@@ -109,11 +110,19 @@ function calcMidpoint(coords: Coords[]): Coords {
   };
 }
 
-function getPlaceCoords(place: PlaceResult): Coords {
-  return {
-    latitude: place.location.coordinates[1],
-    longitude: place.location.coordinates[0],
-  };
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && isFinite(value);
+}
+
+function getPlaceCoords(place: PlaceResult): Coords | null {
+  const coordinates = place.location?.coordinates;
+  if (!Array.isArray(coordinates) || coordinates.length < 2) return null;
+
+  const longitude = coordinates[0];
+  const latitude = coordinates[1];
+  if (!isFiniteNumber(latitude) || !isFiniteNumber(longitude)) return null;
+
+  return { latitude, longitude };
 }
 
 function estimateTravelToPlace(marker: { id: number; name: string; coords: Coords }, placeCoords: Coords): TravelEstimate {
@@ -139,25 +148,29 @@ function getFairnessScore(travelTimes: TravelEstimate[]): number {
 }
 
 function formatRating(place: Pick<PlaceResult, 'rating' | 'userRatingsTotal'>): string | null {
-  if (!Number.isFinite(place.rating)) return null;
-  const total = Number.isFinite(place.userRatingsTotal) ? ` (${place.userRatingsTotal})` : '';
+  if (!isFiniteNumber(place.rating)) return null;
+  const total = isFiniteNumber(place.userRatingsTotal) ? ` (${place.userRatingsTotal})` : '';
   return `${Number(place.rating).toFixed(1)}${total}`;
 }
 
 function rankPlacesByFairness(places: PlaceResult[], markers: { id: number; name: string; coords: Coords }[]): RankedPlace[] {
   if (markers.length < 2) {
-    return places.slice(0, TOP_PLACE_LIMIT).map((place) => ({
-      ...place,
-      fairnessScore: 0,
-      travelStats: { averageMinutes: 0, maxMinutes: 0, minMinutes: 0, spreadMinutes: 0 },
-      travelTimes: [],
-      reason: 'Add at least two locations to calculate fairness.',
-    }));
+    return places
+      .filter((place) => !!getPlaceCoords(place))
+      .slice(0, TOP_PLACE_LIMIT)
+      .map((place) => ({
+        ...place,
+        fairnessScore: 0,
+        travelStats: { averageMinutes: 0, maxMinutes: 0, minMinutes: 0, spreadMinutes: 0 },
+        travelTimes: [],
+        reason: 'Add at least two locations to calculate fairness.',
+      }));
   }
 
   return places
     .map((place) => {
       const placeCoords = getPlaceCoords(place);
+      if (!placeCoords) return null;
       const travelTimes = markers.map((marker) => estimateTravelToPlace(marker, placeCoords));
       const durations = travelTimes.map((item) => item.durationMinutes);
       const averageMinutes = durations.reduce((sum, value) => sum + value, 0) / durations.length;
@@ -178,6 +191,7 @@ function rankPlacesByFairness(places: PlaceResult[], markers: { id: number; name
         reason: `Fairness ${fairnessScore}/100, average travel ${Math.round(averageMinutes)} min, longest travel ${maxMinutes} min.`,
       };
     })
+    .filter((place): place is RankedPlace => !!place)
     .sort((a, b) => {
       if (b.fairnessScore !== a.fairnessScore) return b.fairnessScore - a.fairnessScore;
       return a.travelStats.averageMinutes - b.travelStats.averageMinutes;
@@ -295,7 +309,7 @@ export default function HomeScreen() {
           responseOk: res.ok,
           source: data.source,
           placeCount: data.places?.length || 0,
-          ratedCount: (data.places || []).filter((place: PlaceResult) => Number.isFinite(place.rating)).length,
+          ratedCount: (data.places || []).filter((place: PlaceResult) => isFiniteNumber(place.rating)).length,
           backendDebug: data.debug || null,
           message: data.msg || null,
         });
@@ -366,6 +380,12 @@ export default function HomeScreen() {
 
   const handleSavePlace = async (place: PlaceResult) => {
     if (!user?.id) return;
+    const coords = getPlaceCoords(place);
+    if (!coords) {
+      setLocationError('This place does not have valid coordinates.');
+      return;
+    }
+
     try {
       const payload = {
         placeId: place._id,
@@ -373,10 +393,7 @@ export default function HomeScreen() {
         category: place.category,
         rating: place.rating ?? null,
         vicinity: place.vicinity,
-        location: {
-          latitude: getPlaceCoords(place).latitude,
-          longitude: getPlaceCoords(place).longitude,
-        },
+        location: coords,
         links: {
           maps: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place.name)}`,
           zomato: `https://www.zomato.com/search?q=${encodeURIComponent(place.name)}`,
@@ -391,7 +408,7 @@ export default function HomeScreen() {
       });
       const data = await res.json();
       if (res.ok) {
-        setSavedPlaces(data.places || [])
+        setSavedPlaces(data.places || []);
       }
     } catch (err) {
       console.error('Failed to save place:', err);
@@ -401,7 +418,9 @@ export default function HomeScreen() {
   const openPlaceLink = (place: PlaceResult, type: 'maps' | 'zomato' | 'swiggy') => {
     const coords = getPlaceCoords(place);
     const links = {
-      maps: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${place.name} ${coords.latitude},${coords.longitude}`)}`,
+      maps: coords
+        ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${place.name} ${coords.latitude},${coords.longitude}`)}`
+        : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place.name)}`,
       zomato: `https://www.zomato.com/search?q=${encodeURIComponent(place.name)}`,
       swiggy: `https://www.swiggy.com/search?query=${encodeURIComponent(place.name)}`,
     };
@@ -453,15 +472,19 @@ export default function HomeScreen() {
                 pinColor={i === 0 ? C.accent : i === 1 ? C.green : C.red}
               />
             ))}
-            {rankedPlaces.map((place) => (
-              <Marker
-                key={place._id}
-                coordinate={getPlaceCoords(place)}
-                title={place.name}
-                description={`${place.category} · Fair ${place.fairnessScore}`}
-                pinColor={C.red}
-              />
-            ))}
+            {rankedPlaces.map((place) => {
+              const coords = getPlaceCoords(place);
+              if (!coords) return null;
+              return (
+                <Marker
+                  key={place._id}
+                  coordinate={coords}
+                  title={place.name}
+                  description={`${place.category} · Fair ${place.fairnessScore}`}
+                  pinColor={C.red}
+                />
+              );
+            })}
             {midpoint && (
               <Circle
                 center={midpoint}
@@ -570,7 +593,7 @@ export default function HomeScreen() {
             <Text style={[s.tagline, { marginBottom: 12 }]}>Default from settings: {user.preferredSpotType}</Text>
           ) : null}
           <View style={s.catRow}>
-            {(Object.entries(CATEGORY_LABELS) as [Category, { label: string; icon: string }][]).map(([cat, { label, icon }]) => {
+            {CATEGORY_OPTIONS.map(({ key: cat, label, icon }) => {
               const active = category === cat;
               return (
                 <TouchableOpacity

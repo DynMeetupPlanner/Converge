@@ -4,9 +4,10 @@ import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { AppErrorBoundary } from '@/components/AppErrorBoundary';
 
 export const unstable_settings = {
-  anchor: '(tabs)',
+  anchor: '(auth)',
 };
 
 import { AuthProvider } from '@/context/AuthContext';
@@ -16,18 +17,18 @@ export default function RootLayout() {
   const colorScheme = useColorScheme();
 
   return (
-    <AuthProvider>
-      <PlanProvider>
-        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-          <Stack>
-            <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-            <Stack.Screen name="(app)" options={{ headerShown: false }} />
-          </Stack>
-          <StatusBar style="auto" />
-        </ThemeProvider>
-      </PlanProvider>
-    </AuthProvider>
+    <AppErrorBoundary>
+      <AuthProvider>
+        <PlanProvider>
+          <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+            <Stack>
+              <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+              <Stack.Screen name="(app)" options={{ headerShown: false }} />
+            </Stack>
+            <StatusBar style="auto" />
+          </ThemeProvider>
+        </PlanProvider>
+      </AuthProvider>
+    </AppErrorBoundary>
   );
 }
-
-
