@@ -62,7 +62,7 @@ const CATEGORY_OPTIONS: { key: Category; label: string; icon: string }[] = [
   { key: 'bar', label: 'Bar', icon: 'wine' },
 ];
 
-const FETCH_RADIUS_KM = 5;
+const FETCH_RADIUS_KM = 3;
 const REFETCH_THRESHOLD_KM = 2;
 const TOP_PLACE_LIMIT = 7;
 const DRIVING_SPEED_KMPH = 28;

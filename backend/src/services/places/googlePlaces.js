@@ -1,5 +1,6 @@
 const GOOGLE_PLACES_NEARBY_URL = 'https://maps.googleapis.com/maps/api/place/nearbysearch/json';
 const NEARBY_CACHE_TTL_MS = 1000 * 60 * 5;
+const NEARBY_MAX_PAGES = 1;
 const nearbyCache = new Map();
 
 const GOOGLE_TYPE_BY_CATEGORY = {
@@ -56,7 +57,7 @@ async function fetchGoogleNearbyByType({ lat, lng, radiusKm, apiKey, googleType,
   const results = [];
   let pageToken = null;
 
-  for (let page = 0; page < 3; page += 1) {
+  for (let page = 0; page < NEARBY_MAX_PAGES; page += 1) {
     if (pageToken) params.set('pagetoken', pageToken);
     const url = `${GOOGLE_PLACES_NEARBY_URL}?${params.toString()}`;
     const requestDebug = {
@@ -166,9 +167,10 @@ export async function fetchNearbyPlacesGoogle({ lat, lng, radiusKm, category = '
     ? [category]
     : Object.keys(GOOGLE_TYPE_BY_CATEGORY);
   debug.googleTypesRequested = googleTypes;
+  debug.googleFetchMode = 'parallel-by-type';
+  debug.googleMaxPagesPerType = NEARBY_MAX_PAGES;
 
-  const byPlaceId = new Map();
-  for (const googleType of googleTypes) {
+  const typeResultPairs = await Promise.all(googleTypes.map(async (googleType) => {
     const candidates = await fetchGoogleNearbyByType({
       lat,
       lng,
@@ -177,8 +179,12 @@ export async function fetchNearbyPlacesGoogle({ lat, lng, radiusKm, category = '
       googleType,
       debug,
     });
-    const mappedCategory = CATEGORY_BY_GOOGLE_TYPE[googleType] || category || 'restaurant';
+    return { googleType, candidates };
+  }));
 
+  const byPlaceId = new Map();
+  for (const { googleType, candidates } of typeResultPairs) {
+    const mappedCategory = CATEGORY_BY_GOOGLE_TYPE[googleType] || category || 'restaurant';
     for (const candidate of candidates) {
       if (!candidate.placeId) continue;
       if (!byPlaceId.has(candidate.placeId)) {

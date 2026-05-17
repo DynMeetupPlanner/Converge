@@ -243,7 +243,7 @@ export default function PlanDetailScreen() {
     try {
       const params = new URLSearchParams({
         category: 'all',
-        radius: '5',
+        radius: '3',
         minRating: '0',
         priceLevel,
         openNow: String(openNowOnly),
