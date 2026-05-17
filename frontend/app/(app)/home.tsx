@@ -29,6 +29,7 @@ type PlaceResult = {
   category: string;
   location: { coordinates: [number, number] };
   vicinity?: string;
+  googlePlaceId?: string;
 };
 type SavedPlace = {
   placeId: string;
@@ -410,13 +411,19 @@ export default function HomeScreen() {
 
   const openPlaceLink = (place: PlaceResult, type: 'maps' | 'zomato' | 'swiggy') => {
     const coords = getPlaceCoords(place);
+
+    const mapsUrl = place.googlePlaceId && coords
+      ? `https://www.google.com/maps/search/?api=1&query=${coords.latitude},${coords.longitude}&query_place_id=${place.googlePlaceId}`
+      : coords
+        ? `https://www.google.com/maps/search/?api=1&query=${coords.latitude},${coords.longitude}`
+        : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place.name)}`;
+
     const links = {
-      maps: coords
-        ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${place.name} ${coords.latitude},${coords.longitude}`)}`
-        : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place.name)}`,
+      maps: mapsUrl,
       zomato: `https://www.zomato.com/search?q=${encodeURIComponent(place.name)}`,
       swiggy: `https://www.swiggy.com/search?query=${encodeURIComponent(place.name)}`,
     };
+
     Linking.openURL(links[type]);
   };
 
