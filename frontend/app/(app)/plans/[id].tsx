@@ -20,6 +20,7 @@ import { s, C } from '../../../tempStyles/PlanStyle';
 import { API_URL } from '@/lib/api';
 
 const API_BASE = API_URL || 'https://sturdy-goggles-123083387827.asia-south1.run.app';
+const LIVE_VOTE_POLL_MS = 3000;
 
 const PREFERENCES = ['Cafe', 'Restaurant', 'Park', 'Mall', 'Bar'];
 const CATEGORIES = ['all', 'cafe', 'restaurant', 'park', 'mall', 'bar'];
@@ -29,7 +30,7 @@ const PRICE_LEVELS = ['any', 'unknown', 'budget', 'moderate', 'premium'];
 type TravelMode = typeof TRAVEL_MODES[number];
 type AvailabilitySlot = { day: string; startTime: string; endTime: string };
 type SavedPlace = { placeId: string; status: 'saved' | 'visited' };
-type PlanVote = { placeId: string; userId: string };
+type PlanVote = { placeId?: string; userId: string; place?: { placeId?: string } };
 type PlacesDebug = Record<string, unknown> | null;
 type Recommendation = {
   placeId: string;
@@ -79,6 +80,10 @@ function formatRating(place: Pick<Recommendation, 'rating' | 'userRatingsTotal'>
   return `${Number(place.rating).toFixed(1)}${total}`;
 }
 
+function normalizePlaceKey(value: unknown): string {
+  return String(value || '').trim();
+}
+
 export default function PlanDetailScreen() {
   const { id: planId } = useLocalSearchParams();
   const { user } = useAuth();
@@ -110,6 +115,7 @@ export default function PlanDetailScreen() {
   const [hasChosenCategoryFilter, setHasChosenCategoryFilter] = useState(false);
   const [expandedPlaceId, setExpandedPlaceId] = useState<string | null>(null);
   const [placesDebug, setPlacesDebug] = useState<PlacesDebug>(null);
+  const voteSyncInFlightRef = React.useRef(false);
   const visibleRecommendations = useMemo(
     () => (categoryFilter === 'all'
       ? recommendations
@@ -121,6 +127,10 @@ export default function PlanDetailScreen() {
       ? emergencyAlternatives
       : emergencyAlternatives.filter((place) => place.category === categoryFilter)),
     [categoryFilter, emergencyAlternatives]
+  );
+  const locatedMemberCount = useMemo(
+    () => currentPlan?.members?.filter((member) => member.location).length || 0,
+    [currentPlan?.members]
   );
 
   useEffect(() => {
@@ -238,7 +248,7 @@ export default function PlanDetailScreen() {
   };
 
   const fetchRecommendations = React.useCallback(async () => {
-    if (!planIdString || String(currentPlan?._id) !== planIdString || !currentPlan?.members?.filter(m => m.location).length) return;
+    if (!planIdString || String(currentPlan?._id) !== planIdString || locatedMemberCount < 2) return;
     setRecommendationLoading(true);
     try {
       const params = new URLSearchParams({
@@ -295,24 +305,62 @@ export default function PlanDetailScreen() {
         setRecommendationLoading(false);
       }
     }
-  }, [currentPlan?._id, currentPlan?.members, openNowOnly, planIdString, priceLevel, travelMode]);
+  }, [currentPlan?._id, locatedMemberCount, openNowOnly, planIdString, priceLevel, travelMode]);
 
   useEffect(() => {
-    if (String(currentPlan?._id) === planIdString && (currentPlan?.members?.filter(m => m.location).length || 0) >= 2) {
+    if (String(currentPlan?._id) === planIdString && locatedMemberCount >= 2) {
       fetchRecommendations();
     }
-  }, [currentPlan?._id, currentPlan?.members, currentPlan?.members?.length, fetchRecommendations, planIdString]);
+  }, [currentPlan?._id, fetchRecommendations, locatedMemberCount, planIdString]);
 
-  const applyVotesToRecommendations = (votes: PlanVote[] = []) => {
+  const applyVotesToRecommendations = React.useCallback((votes: PlanVote[] = []) => {
+    const votesByPlace = new Map<string, string[]>();
+    for (const vote of votes) {
+      const placeKey = normalizePlaceKey(vote.placeId || vote.place?.placeId);
+      if (!placeKey) continue;
+      const existing = votesByPlace.get(placeKey) || [];
+      existing.push(String(vote.userId));
+      votesByPlace.set(placeKey, existing);
+    }
+
     setRecommendations((current) => current.map((place) => {
-      const placeVotes = votes.filter((vote) => vote.placeId === place.placeId);
+      const placeKey = normalizePlaceKey(place.placeId);
+      const votedBy = votesByPlace.get(placeKey) || [];
       return {
         ...place,
-        voteCount: placeVotes.length,
-        votedBy: placeVotes.map((vote) => String(vote.userId)),
+        voteCount: votedBy.length,
+        votedBy,
       };
     }));
-  };
+  }, []);
+
+  useEffect(() => {
+    if (!planIdString || String(currentPlan?._id) !== planIdString) return;
+
+    let cancelled = false;
+    const syncVotes = async () => {
+      if (voteSyncInFlightRef.current) return;
+      voteSyncInFlightRef.current = true;
+      try {
+        const res = await fetch(`${API_BASE}/plans/${planIdString}`);
+        const data = await res.json();
+        if (!cancelled && res.ok) {
+          applyVotesToRecommendations(data.plan?.votes || []);
+        }
+      } catch (err) {
+        console.error('Live vote sync error:', err);
+      } finally {
+        voteSyncInFlightRef.current = false;
+      }
+    };
+
+    syncVotes();
+    const timer = setInterval(syncVotes, LIVE_VOTE_POLL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [applyVotesToRecommendations, currentPlan?._id, planIdString]);
 
   const handleVote = async (place: Recommendation) => {
     try {
@@ -323,7 +371,6 @@ export default function PlanDetailScreen() {
       });
       const data = await res.json();
       if (res.ok) {
-        setCurrentPlan(data.plan);
         applyVotesToRecommendations(data.plan?.votes || []);
       } else {
         alert(data.msg || 'Could not vote');
@@ -664,6 +711,12 @@ export default function PlanDetailScreen() {
                       <Text style={s.userTag}>
                         {ratingText ? `${ratingText} stars · ` : ''}Fair {place.fairnessScore} · {place.category}
                       </Text>
+                    </View>
+                    <View style={{ alignItems: 'flex-end', marginRight: 8 }}>
+                      <Text style={s.metaText}>Votes {place.voteCount}</Text>
+                      {hasVoted ? (
+                        <Text style={[s.metaText, { color: C.accent, fontWeight: '700' }]}>Voted</Text>
+                      ) : null}
                     </View>
                     <Ionicons
                       name={expanded ? 'chevron-up' : 'chevron-down'}
