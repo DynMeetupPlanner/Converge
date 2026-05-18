@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   View,
@@ -16,6 +16,7 @@ import { API_URL } from '@/lib/api';
 import { s, C } from '../../tempStyles/PlanStyle';
 
 const API_BASE = API_URL || 'https://sturdy-goggles-123083387827.asia-south1.run.app';
+const REQUESTS_AUTO_REFRESH_MS = 4000;
 
 type UserItem = {
   id: string;
@@ -34,6 +35,7 @@ export default function FriendsScreen() {
   const [loading, setLoading] = useState(false);
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState('');
+  const requestsSyncInFlight = useRef(false);
 
   const friendIds = new Set(friends.map((friend) => friend.id));
   const outgoingIds = new Set(outgoingRequests.map((request) => request.id));
@@ -97,6 +99,29 @@ export default function FriendsScreen() {
 
     return () => clearTimeout(timer);
   }, [activeTab, query, user?.id]);
+
+  const refreshRequestsSilently = useCallback(async () => {
+    if (!user?.id || requestsSyncInFlight.current) return;
+    requestsSyncInFlight.current = true;
+    try {
+      const res = await fetch(`${API_BASE}/users/requests?userId=${encodeURIComponent(user.id)}`);
+      const data = await res.json();
+      if (!res.ok) return;
+      setIncomingRequests(data.incoming || []);
+      setOutgoingRequests(data.outgoing || []);
+    } catch (err) {
+      console.error('Silent requests refresh error:', err);
+    } finally {
+      requestsSyncInFlight.current = false;
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (activeTab !== 'requests') return;
+    refreshRequestsSilently();
+    const timer = setInterval(refreshRequestsSilently, REQUESTS_AUTO_REFRESH_MS);
+    return () => clearInterval(timer);
+  }, [activeTab, refreshRequestsSilently]);
 
   const sendRequest = async (toUserId: string) => {
     if (!user?.id) return;

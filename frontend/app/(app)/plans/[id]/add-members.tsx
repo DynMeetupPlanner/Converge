@@ -9,13 +9,14 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { usePlans, User } from '@/context/PlanContext';
 import { useAuth } from '@/context/AuthContext';
 import { s, C } from '../../../../tempStyles/PlanStyle';
 import { API_URL } from '@/lib/api';
 
 const API_BASE = API_URL || 'https://sturdy-goggles-123083387827.asia-south1.run.app';
+const FRIENDS_AUTO_REFRESH_MS = 4000;
 
 export default function AddMembersScreen() {
   const { id: planId } = useLocalSearchParams();
@@ -89,10 +90,19 @@ export default function AddMembersScreen() {
     }
   }, [user?.id]);
 
-  useEffect(() => {
-    refreshFriends();
-    refreshRequests();
-  }, [refreshFriends, refreshRequests]);
+  useFocusEffect(
+    useCallback(() => {
+      refreshFriends();
+      refreshRequests();
+
+      const timer = setInterval(() => {
+        refreshFriends();
+        refreshRequests();
+      }, FRIENDS_AUTO_REFRESH_MS);
+
+      return () => clearInterval(timer);
+    }, [refreshFriends, refreshRequests])
+  );
 
   // Debounced search
   useEffect(() => {
