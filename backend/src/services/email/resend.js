@@ -17,7 +17,7 @@ export async function sendPasswordResetOtpEmail({ to, otp, name, expiresMinutes 
     throw new Error('RESEND_API_KEY is missing');
   }
 
-  const from = process.env.EMAIL_FROM || 'onboarding@resend.dev';
+  const from = process.env.EMAIL_FROM || 'Converge <noreply@send.convergemeetup.online>';
   const safeName = escapeHtml(name || 'there');
   const safeOtp = escapeHtml(otp);
   const safeExpiry = escapeHtml(expiresMinutes);
