@@ -15,9 +15,10 @@ const CATEGORY_BY_GOOGLE_TYPE = Object.fromEntries(
   Object.entries(GOOGLE_TYPE_BY_CATEGORY).map(([category, googleType]) => [googleType, category])
 );
 
-// ─── FIX 1: Semantic exclusion lists per category ────────────────────────────
-// Google's nearbysearch is noisy. These types leak into results despite the
-// correct category filter being set. We reject them at the source.
+// ─── Semantic exclusion lists ─────────────────────────────────────────────────
+// FIX 1: Removed clothing_store, shoe_store, electronics_store from mall list.
+// Real malls carry those types as secondary tags — excluding them killed valid results.
+// Only exclude types that are NEVER part of a real mall destination.
 
 const EXCLUDED_TYPES_BY_CATEGORY = {
   mall: [
@@ -26,7 +27,7 @@ const EXCLUDED_TYPES_BY_CATEGORY = {
     'home_goods_store',
     'storage',
     'car_repair',
-    'car_dealer',          
+    'car_dealer',
     'bicycle_store',
     'plumber',
     'electrician',
@@ -44,13 +45,11 @@ const EXCLUDED_TYPES_BY_CATEGORY = {
   ],
   bar: [
     'gas_station',
-    'night_club',   // remove if you want to include clubs
   ],
   park: [],
 };
 
-// ─── FIX 2: Keyword heuristics ───────────────────────────────────────────────
-// Ugly but effective. Name-level signals catch what type-level filtering misses.
+// ─── Keyword heuristics ───────────────────────────────────────────────────────
 
 const POSITIVE_KEYWORDS_BY_CATEGORY = {
   mall: ['mall', 'plaza', 'center', 'centre', 'galleria', 'arcade', 'market', 'square', 'hub'],
@@ -68,24 +67,51 @@ const NEGATIVE_KEYWORDS_BY_CATEGORY = {
   park: [],
 };
 
-// ─── FIX 3: Minimum popularity thresholds ────────────────────────────────────
-// A 50km search radius pulls in tiny obscure stores. We hard-reject anything
-// below a minimum review count so garbage can never surface.
+// FIX 5: Chain penalty list. These brands dominate on review count but are
+// poor meetup destinations — too transactional, no ambience, no novelty.
+// We penalise in scoring rather than filtering: if nothing better exists, they still show.
+const CHAIN_NAMES = [
+  'starbucks', "mcdonald's", 'mcdonalds', "domino's", 'dominos',
+  'kfc', 'subway', 'burger king', 'pizza hut', 'taco bell',
+  'dunkin', 'costa coffee', 'cafe coffee day', 'ccd',
+  'baskin robbins', 'haldirams', 'barbeque nation',
+];
 
-const MIN_RATINGS_BY_CATEGORY = {
-  mall: 200,    // real malls have thousands; 200 is a generous floor
-  restaurant: 30,
-  cafe: 20,
-  bar: 20,
-  park: 10,
-};
+// ─── Dynamic popularity thresholds ───────────────────────────────────────────
+// FIX 2: Static thresholds broke smaller cities. Threshold now scales with
+// search radius — tight radius = lower bar (fewer options); wide = stricter.
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+function getDynamicMinRatings(category, radiusKm) {
+  const r = Number(radiusKm) || 5;
+  switch (category) {
+    case 'mall':
+      if (r <= 3) return 50;
+      if (r <= 8) return 120;
+      return 200;
+    case 'restaurant':
+      if (r <= 3) return 10;
+      if (r <= 8) return 25;
+      return 40;
+    case 'cafe':
+      if (r <= 3) return 8;
+      if (r <= 8) return 15;
+      return 25;
+    case 'bar':
+      if (r <= 3) return 8;
+      if (r <= 8) return 15;
+      return 25;
+    case 'park':
+      return 5;
+    default:
+      return 0;
+  }
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function clampRadiusMeters(radiusKm) {
   const meters = Number(radiusKm) * 1000;
   if (!Number.isFinite(meters)) return 5000;
-  // FIX 4: Clamp max to 12km. 50km radius is the primary cause of junk results.
   return Math.max(100, Math.min(12000, meters));
 }
 
@@ -101,67 +127,127 @@ function sanitizeGoogleUrl(url, apiKey) {
   return url.replace(apiKey, 'GOOGLE_PLACES_API_KEY');
 }
 
+function isChain(name) {
+  const lower = (name || '').toLowerCase();
+  return CHAIN_NAMES.some((chain) => lower.includes(chain));
+}
+
 /**
- * Returns true if this place should be excluded for the given category.
- * Applies type exclusions + keyword heuristics.
+ * Hard filter: returns true if this place should be rejected entirely.
+ * Applies type exclusions, keyword exclusions, and dynamic popularity floor.
  */
-function isJunkResult(place, category) {
+function isJunkResult(place, category, radiusKm) {
   const types = place.types || [];
   const nameLower = (place.name || '').toLowerCase();
 
-  // Type-level exclusion
   const excludedTypes = EXCLUDED_TYPES_BY_CATEGORY[category] || [];
   if (excludedTypes.some((t) => types.includes(t))) return true;
 
-  // Keyword-level exclusion (negative keywords in name)
   const negativeKeywords = NEGATIVE_KEYWORDS_BY_CATEGORY[category] || [];
   if (negativeKeywords.some((kw) => nameLower.includes(kw))) return true;
 
-  // Popularity threshold
-  const minRatings = MIN_RATINGS_BY_CATEGORY[category];
-  if (minRatings !== undefined && (place.userRatingsTotal || 0) < minRatings) return true;
+  const minRatings = getDynamicMinRatings(category, radiusKm);
+  if ((place.userRatingsTotal || 0) < minRatings) return true;
 
   return false;
 }
 
-/**
- * Keyword-based name boost score (0–1). Rewards places whose names signal
- * they are a real destination of the requested category type.
- */
+// ─── FIX 7: Temporal context scoring ─────────────────────────────────────────
+// Venue types have strong time-of-day preferences. This makes recommendations
+// feel contextually intelligent rather than time-blind.
+
+function getTemporalBoost(category) {
+  const now = new Date();
+  const hour = now.getHours();
+  const dow = now.getDay();
+  const isWeekend = dow === 0 || dow === 6;
+  const isMorning   = hour >= 6  && hour < 12;
+  const isAfternoon = hour >= 12 && hour < 17;
+  const isEvening   = hour >= 17 && hour < 21;
+  const isNight     = hour >= 21 || hour < 4;
+
+  switch (category) {
+    case 'cafe':
+      if (isMorning)   return 15;
+      if (isAfternoon) return 8;
+      if (isEvening)   return 3;
+      return -5;
+    case 'bar':
+      if (isNight)     return 15;
+      if (isEvening)   return 12;
+      if (isAfternoon) return 2;
+      return -8;
+    case 'park':
+      if (isNight)     return -15;
+      if (isMorning)   return 12;
+      if (isAfternoon) return 10;
+      return 5;
+    case 'mall':
+      if (isNight)     return -10;
+      if (isWeekend)   return 10;
+      return 5;
+    case 'restaurant':
+      if (isMorning)   return -3;
+      if (isAfternoon) return 10;
+      if (isEvening)   return 12;
+      if (isNight)     return 5;
+      return 0;
+    default:
+      return 0;
+  }
+}
+
+// ─── FIX 3: Graduated keyword scoring ────────────────────────────────────────
+// Was binary 0/1. Now 5 pts per matching keyword so multi-signal names
+// (e.g. "Phoenix Marketcity Mall") score higher than single-signal names.
+
 function getKeywordBoost(place, category) {
   const nameLower = (place.name || '').toLowerCase();
   const positiveKeywords = POSITIVE_KEYWORDS_BY_CATEGORY[category] || [];
   if (positiveKeywords.length === 0) return 0;
-  return positiveKeywords.some((kw) => nameLower.includes(kw)) ? 1 : 0;
+  const matchCount = positiveKeywords.filter((kw) => nameLower.includes(kw)).length;
+  return matchCount * 5;
 }
 
 /**
- * Social suitability score (0–100). Measures how good a place is as a meetup
- * destination regardless of its distance from the centroid.
+ * Social suitability score (composite).
+ * Combines: popularity, rating quality, open-now, category anchor,
+ * keyword name signals, temporal context, chain penalty.
+ *
+ * Used for pre-sorting before the meetup fairness ranker runs.
+ * Your ranker should incorporate this as ~30% of its final score.
+ * Suggested weights: fairness 35%, travel 20%, rating 15%, social 30%.
  */
-function getSocialScore(place, category) {
+function getSocialScore(place, category, radiusKm) {
   let score = 0;
 
-  // Popularity signal — the single strongest quality signal we have
+  // Popularity — strongest objective signal
   const reviews = place.userRatingsTotal || 0;
-  if (reviews > 2000) score += 30;
-  else if (reviews > 500) score += 20;
-  else if (reviews > 100) score += 10;
+  if (reviews > 5000)      score += 35;
+  else if (reviews > 2000) score += 30;
+  else if (reviews > 500)  score += 20;
+  else if (reviews > 100)  score += 10;
 
   // Rating quality
-  if (place.rating >= 4.5) score += 20;
+  if (place.rating >= 4.5)      score += 20;
   else if (place.rating >= 4.2) score += 15;
   else if (place.rating >= 4.0) score += 8;
 
   // Open right now
   if (place.openNow === true) score += 10;
 
-  // Category-specific bonuses
-  if (category === 'mall') score += 10;   // malls are inherently good meetup anchors
-  if (category === 'park') score += 5;
+  // Category anchor bonus
+  if (category === 'mall')       score += 8;
+  if (category === 'restaurant') score += 5;
 
-  // Keyword name boost (0 or 1 scaled to 0 or 10)
-  score += getKeywordBoost(place, category) * 10;
+  // Keyword name bonus (FIX 3 — graduated)
+  score += getKeywordBoost(place, category);
+
+  // Temporal context (FIX 7)
+  score += getTemporalBoost(category);
+
+  // Chain penalty (FIX 5) — soft suppression, not a hard filter
+  if (isChain(place.name)) score -= 10;
 
   return score;
 }
@@ -238,7 +324,6 @@ async function fetchGoogleNearbyByType({ lat, lng, radiusKm, apiKey, googleType,
       const glng = item?.geometry?.location?.lng;
       if (!Number.isFinite(glat) || !Number.isFinite(glng)) continue;
 
-      // FIX 1: Preserve ALL Google types so downstream filters can use them
       results.push({
         placeId: item.place_id,
         name: item.name,
@@ -250,8 +335,8 @@ async function fetchGoogleNearbyByType({ lat, lng, radiusKm, apiKey, googleType,
         vicinity: item.vicinity,
         openNow: typeof item.opening_hours?.open_now === 'boolean' ? item.opening_hours.open_now : null,
         businessStatus: item.business_status,
-        types: Array.isArray(item.types) ? item.types : [],          // ← NEW
-        primaryType: item.types?.[0] || null,                        // ← NEW
+        types: Array.isArray(item.types) ? item.types : [],
+        primaryType: item.types?.[0] || null,
       });
     }
 
@@ -265,7 +350,7 @@ async function fetchGoogleNearbyByType({ lat, lng, radiusKm, apiKey, googleType,
 
 // ─── Normalization ────────────────────────────────────────────────────────────
 
-function normalizeGooglePlace(item, category) {
+function normalizeGooglePlace(item, category, radiusKm) {
   return {
     _id: `google-${item.placeId}`,
     externalId: `google-${item.placeId}`,
@@ -280,9 +365,10 @@ function normalizeGooglePlace(item, category) {
     vicinity: item.vicinity,
     openNow: item.openNow,
     businessStatus: item.businessStatus,
-    types: item.types,           // ← pass through for downstream use
+    types: item.types,
     primaryType: item.primaryType,
-    socialScore: getSocialScore(item, category),   // ← pre-computed, use in ranker
+    isChain: isChain(item.name),
+    socialScore: getSocialScore(item, category, radiusKm),
     location: {
       coordinates: [item.lng, item.lat],
     },
@@ -298,6 +384,7 @@ export async function fetchNearbyPlacesGoogle({ lat, lng, radiusKm, category = '
   debug.googleRequests = debug.googleRequests || [];
   debug.googleErrors = debug.googleErrors || [];
   debug.googleCategoryTypes = GOOGLE_TYPE_BY_CATEGORY;
+  debug.filteredCount = 0; // FIX 8: counter not string array — avoids log bloat
 
   if (!apiKey) {
     debug.googleErrors.push('GOOGLE_PLACES_API_KEY is missing on backend');
@@ -335,19 +422,19 @@ export async function fetchNearbyPlacesGoogle({ lat, lng, radiusKm, category = '
       if (!candidate.placeId) continue;
       if (byPlaceId.has(candidate.placeId)) continue;
 
-      // FIX 2+3: Reject junk before it ever enters the results set
-      if (isJunkResult(candidate, mappedCategory)) {
-        debug.googleErrors.push?.(`Filtered junk: "${candidate.name}" (types: ${candidate.types?.join(', ')})`);
+      if (isJunkResult(candidate, mappedCategory, radiusKm)) {
+        debug.filteredCount += 1; // FIX 8: count, don't log every name
         continue;
       }
 
-      byPlaceId.set(candidate.placeId, normalizeGooglePlace(candidate, mappedCategory));
+      byPlaceId.set(candidate.placeId, normalizeGooglePlace(candidate, mappedCategory, radiusKm));
     }
   }
 
   const places = [...byPlaceId.values()];
 
-  // Sort by socialScore descending so the ranker starts with the best candidates
+  // Pre-sort by socialScore so your meetup ranker starts from the best candidates.
+  // Suggested final weights: fairness 35%, travel 20%, rating 15%, social 30%.
   places.sort((a, b) => (b.socialScore ?? 0) - (a.socialScore ?? 0));
 
   debug.inputPlaceCount = places.length;
