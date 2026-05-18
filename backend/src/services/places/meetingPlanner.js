@@ -69,6 +69,7 @@ function normalizePlace(place) {
   const [longitude, latitude] = place.location?.coordinates || [];
   return {
     placeId: place._id,
+    googlePlaceId: place.googlePlaceId,
     name: place.name,
     category: place.category,
     rating: place.rating ?? null,

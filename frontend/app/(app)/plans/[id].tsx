@@ -34,6 +34,7 @@ type PlanVote = { placeId?: string; userId: string; place?: { placeId?: string }
 type PlacesDebug = Record<string, unknown> | null;
 type Recommendation = {
   placeId: string;
+  googlePlaceId?: string;
   name: string;
   category: string;
   rating: number | null;
@@ -407,6 +408,8 @@ export default function PlanDetailScreen() {
     }
   };
 
+
+
   const handleAddHistory = async (place: Recommendation) => {
     await handleSavePlace(place, 'visited');
     try {
@@ -422,9 +425,42 @@ export default function PlanDetailScreen() {
     }
   };
 
-  const openLink = (url?: string) => {
-    if (url) Linking.openURL(url);
+
+function getPlaceCoords(place: Recommendation) {
+  if (
+    Number.isFinite(place.location?.latitude) &&
+    Number.isFinite(place.location?.longitude)
+  ) {
+    return {
+      latitude: place.location.latitude,
+      longitude: place.location.longitude,
+    };
+  }
+
+  return null;
+}
+
+const openPlaceLink = (
+  place: Recommendation,
+  type: 'maps' | 'zomato' | 'swiggy'
+) => {
+  const coords = getPlaceCoords(place);
+
+  const mapsUrl =
+    place.googlePlaceId && coords
+      ? `https://www.google.com/maps/search/?api=1&query=${coords.latitude},${coords.longitude}&query_place_id=${place.googlePlaceId}`
+      : coords
+        ? `https://www.google.com/maps/search/?api=1&query=${coords.latitude},${coords.longitude}`
+        : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place.name)}`;
+
+  const links = {
+    maps: mapsUrl,
+    zomato: `https://www.zomato.com/search?q=${encodeURIComponent(place.name)}`,
+    swiggy: `https://www.swiggy.com/search?query=${encodeURIComponent(place.name)}`,
   };
+
+  Linking.openURL(links[type]);
+};
 
   if (loading && !refreshing) {
     return (
@@ -779,13 +815,13 @@ export default function PlanDetailScreen() {
                       <TouchableOpacity style={s.chip} onPress={() => handleAddHistory(place)}>
                         <Text style={s.chipText}>Visited</Text>
                       </TouchableOpacity>
-                      <TouchableOpacity style={s.chip} onPress={() => openLink(place.links.maps)}>
+                      <TouchableOpacity style={s.chip} onPress={() => openPlaceLink(place, 'maps')}>
                         <Text style={s.chipText}>Maps</Text>
                       </TouchableOpacity>
-                      <TouchableOpacity style={s.chip} onPress={() => openLink(place.links.zomato)}>
+                      <TouchableOpacity style={s.chip} onPress={() => openPlaceLink(place, 'zomato')}>
                         <Text style={s.chipText}>Zomato</Text>
                       </TouchableOpacity>
-                      <TouchableOpacity style={s.chip} onPress={() => openLink(place.links.swiggy)}>
+                      <TouchableOpacity style={s.chip} onPress={() => openPlaceLink(place, 'swiggy')} >
                         <Text style={s.chipText}>Swiggy</Text>
                       </TouchableOpacity>
                     </View>
@@ -799,7 +835,7 @@ export default function PlanDetailScreen() {
             <View>
               <Text style={s.sectionTitle}>Backup Options</Text>
               {visibleEmergencyAlternatives.map(place => (
-                <TouchableOpacity key={`backup-${place.placeId}`} style={s.userItem} onPress={() => openLink(place.links.maps)}>
+                <TouchableOpacity key={`backup-${place.placeId}`} style={s.userItem} onPress={() => openPlaceLink(place, 'maps')}>
                   <View style={s.avatar}>
                     <Ionicons name="trail-sign-outline" size={18} color={C.accent} />
                   </View>
