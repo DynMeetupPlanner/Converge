@@ -15,10 +15,78 @@ const CATEGORY_BY_GOOGLE_TYPE = Object.fromEntries(
   Object.entries(GOOGLE_TYPE_BY_CATEGORY).map(([category, googleType]) => [googleType, category])
 );
 
+// ─── FIX 1: Semantic exclusion lists per category ────────────────────────────
+// Google's nearbysearch is noisy. These types leak into results despite the
+// correct category filter being set. We reject them at the source.
+
+const EXCLUDED_TYPES_BY_CATEGORY = {
+  mall: [
+    'furniture_store',
+    'hardware_store',
+    'home_goods_store',
+    'storage',
+    'car_repair',
+    'car_dealer',          
+    'bicycle_store',
+    'plumber',
+    'electrician',
+    'general_contractor',
+    'moving_company',
+  ],
+  restaurant: [
+    'gas_station',
+    'car_wash',
+    'lodging',
+  ],
+  cafe: [
+    'gas_station',
+    'car_wash',
+  ],
+  bar: [
+    'gas_station',
+    'night_club',   // remove if you want to include clubs
+  ],
+  park: [],
+};
+
+// ─── FIX 2: Keyword heuristics ───────────────────────────────────────────────
+// Ugly but effective. Name-level signals catch what type-level filtering misses.
+
+const POSITIVE_KEYWORDS_BY_CATEGORY = {
+  mall: ['mall', 'plaza', 'center', 'centre', 'galleria', 'arcade', 'market', 'square', 'hub'],
+  restaurant: [],
+  cafe: ['cafe', 'coffee', 'brew', 'roast', 'bistro', 'bakery'],
+  bar: ['bar', 'pub', 'lounge', 'brewery', 'taproom', 'tavern'],
+  park: ['park', 'garden', 'lake', 'reserve', 'trail', 'green'],
+};
+
+const NEGATIVE_KEYWORDS_BY_CATEGORY = {
+  mall: ['furniture', 'hardware', 'electrical', 'tiles', 'plywood', 'timber', 'lumber', 'spare parts', 'motors', 'tyres', 'tires'],
+  restaurant: [],
+  cafe: [],
+  bar: [],
+  park: [],
+};
+
+// ─── FIX 3: Minimum popularity thresholds ────────────────────────────────────
+// A 50km search radius pulls in tiny obscure stores. We hard-reject anything
+// below a minimum review count so garbage can never surface.
+
+const MIN_RATINGS_BY_CATEGORY = {
+  mall: 200,    // real malls have thousands; 200 is a generous floor
+  restaurant: 30,
+  cafe: 20,
+  bar: 20,
+  park: 10,
+};
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
 function clampRadiusMeters(radiusKm) {
   const meters = Number(radiusKm) * 1000;
   if (!Number.isFinite(meters)) return 5000;
-  return Math.max(100, Math.min(50000, meters));
+  // FIX 4: Clamp max to 12km. 50km radius is the primary cause of junk results.
+  return Math.max(100, Math.min(12000, meters));
 }
 
 function priceLevelToBucket(priceLevel) {
@@ -32,6 +100,73 @@ function priceLevelToBucket(priceLevel) {
 function sanitizeGoogleUrl(url, apiKey) {
   return url.replace(apiKey, 'GOOGLE_PLACES_API_KEY');
 }
+
+/**
+ * Returns true if this place should be excluded for the given category.
+ * Applies type exclusions + keyword heuristics.
+ */
+function isJunkResult(place, category) {
+  const types = place.types || [];
+  const nameLower = (place.name || '').toLowerCase();
+
+  // Type-level exclusion
+  const excludedTypes = EXCLUDED_TYPES_BY_CATEGORY[category] || [];
+  if (excludedTypes.some((t) => types.includes(t))) return true;
+
+  // Keyword-level exclusion (negative keywords in name)
+  const negativeKeywords = NEGATIVE_KEYWORDS_BY_CATEGORY[category] || [];
+  if (negativeKeywords.some((kw) => nameLower.includes(kw))) return true;
+
+  // Popularity threshold
+  const minRatings = MIN_RATINGS_BY_CATEGORY[category];
+  if (minRatings !== undefined && (place.userRatingsTotal || 0) < minRatings) return true;
+
+  return false;
+}
+
+/**
+ * Keyword-based name boost score (0–1). Rewards places whose names signal
+ * they are a real destination of the requested category type.
+ */
+function getKeywordBoost(place, category) {
+  const nameLower = (place.name || '').toLowerCase();
+  const positiveKeywords = POSITIVE_KEYWORDS_BY_CATEGORY[category] || [];
+  if (positiveKeywords.length === 0) return 0;
+  return positiveKeywords.some((kw) => nameLower.includes(kw)) ? 1 : 0;
+}
+
+/**
+ * Social suitability score (0–100). Measures how good a place is as a meetup
+ * destination regardless of its distance from the centroid.
+ */
+function getSocialScore(place, category) {
+  let score = 0;
+
+  // Popularity signal — the single strongest quality signal we have
+  const reviews = place.userRatingsTotal || 0;
+  if (reviews > 2000) score += 30;
+  else if (reviews > 500) score += 20;
+  else if (reviews > 100) score += 10;
+
+  // Rating quality
+  if (place.rating >= 4.5) score += 20;
+  else if (place.rating >= 4.2) score += 15;
+  else if (place.rating >= 4.0) score += 8;
+
+  // Open right now
+  if (place.openNow === true) score += 10;
+
+  // Category-specific bonuses
+  if (category === 'mall') score += 10;   // malls are inherently good meetup anchors
+  if (category === 'park') score += 5;
+
+  // Keyword name boost (0 or 1 scaled to 0 or 10)
+  score += getKeywordBoost(place, category) * 10;
+
+  return score;
+}
+
+// ─── Core fetcher ─────────────────────────────────────────────────────────────
 
 async function fetchGoogleNearbyByType({ lat, lng, radiusKm, apiKey, googleType, debug }) {
   const cacheKey = `${googleType}:${Math.round(Number(lat) * 1000) / 1000},${Math.round(Number(lng) * 1000) / 1000},${Math.round(Number(radiusKm) * 10) / 10}`;
@@ -67,7 +202,6 @@ async function fetchGoogleNearbyByType({ lat, lng, radiusKm, apiKey, googleType,
       fromMemoryCache: false,
     };
 
-    // Google next_page_token can take a moment to activate.
     if (pageToken) await new Promise((r) => setTimeout(r, 2500));
 
     const response = await fetch(url, { headers: { Accept: 'application/json' } });
@@ -103,6 +237,8 @@ async function fetchGoogleNearbyByType({ lat, lng, radiusKm, apiKey, googleType,
       const glat = item?.geometry?.location?.lat;
       const glng = item?.geometry?.location?.lng;
       if (!Number.isFinite(glat) || !Number.isFinite(glng)) continue;
+
+      // FIX 1: Preserve ALL Google types so downstream filters can use them
       results.push({
         placeId: item.place_id,
         name: item.name,
@@ -114,6 +250,8 @@ async function fetchGoogleNearbyByType({ lat, lng, radiusKm, apiKey, googleType,
         vicinity: item.vicinity,
         openNow: typeof item.opening_hours?.open_now === 'boolean' ? item.opening_hours.open_now : null,
         businessStatus: item.business_status,
+        types: Array.isArray(item.types) ? item.types : [],          // ← NEW
+        primaryType: item.types?.[0] || null,                        // ← NEW
       });
     }
 
@@ -124,6 +262,8 @@ async function fetchGoogleNearbyByType({ lat, lng, radiusKm, apiKey, googleType,
   nearbyCache.set(cacheKey, { at: Date.now(), value: results });
   return results;
 }
+
+// ─── Normalization ────────────────────────────────────────────────────────────
 
 function normalizeGooglePlace(item, category) {
   return {
@@ -140,11 +280,16 @@ function normalizeGooglePlace(item, category) {
     vicinity: item.vicinity,
     openNow: item.openNow,
     businessStatus: item.businessStatus,
+    types: item.types,           // ← pass through for downstream use
+    primaryType: item.primaryType,
+    socialScore: getSocialScore(item, category),   // ← pre-computed, use in ranker
     location: {
       coordinates: [item.lng, item.lat],
     },
   };
 }
+
+// ─── Public export ────────────────────────────────────────────────────────────
 
 export async function fetchNearbyPlacesGoogle({ lat, lng, radiusKm, category = 'all', debug }) {
   const apiKey = process.env.GOOGLE_PLACES_API_KEY;
@@ -185,15 +330,26 @@ export async function fetchNearbyPlacesGoogle({ lat, lng, radiusKm, category = '
   const byPlaceId = new Map();
   for (const { googleType, candidates } of typeResultPairs) {
     const mappedCategory = CATEGORY_BY_GOOGLE_TYPE[googleType] || category || 'restaurant';
+
     for (const candidate of candidates) {
       if (!candidate.placeId) continue;
-      if (!byPlaceId.has(candidate.placeId)) {
-        byPlaceId.set(candidate.placeId, normalizeGooglePlace(candidate, mappedCategory));
+      if (byPlaceId.has(candidate.placeId)) continue;
+
+      // FIX 2+3: Reject junk before it ever enters the results set
+      if (isJunkResult(candidate, mappedCategory)) {
+        debug.googleErrors.push?.(`Filtered junk: "${candidate.name}" (types: ${candidate.types?.join(', ')})`);
+        continue;
       }
+
+      byPlaceId.set(candidate.placeId, normalizeGooglePlace(candidate, mappedCategory));
     }
   }
 
   const places = [...byPlaceId.values()];
+
+  // Sort by socialScore descending so the ranker starts with the best candidates
+  places.sort((a, b) => (b.socialScore ?? 0) - (a.socialScore ?? 0));
+
   debug.inputPlaceCount = places.length;
   debug.outputRatedPlaceCount = places.filter((place) => Number.isFinite(place.rating)).length;
   debug.outputGoogleRatedPlaceCount = places.filter((place) => place.ratingSource === 'google' && Number.isFinite(place.rating)).length;
