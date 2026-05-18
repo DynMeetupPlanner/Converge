@@ -367,7 +367,7 @@ export default function AddMembersScreen() {
               </View>
             ) : query.length >= 2 && results.length === 0 && !searching ? (
               <View style={[s.empty, { paddingVertical: 30 }]}>
-                <Text style={s.emptyText}>No registered users found for "{query.trim()}"</Text>
+                <Text style={s.emptyText}>No registered users found for {`"${query.trim()}"`}</Text>
               </View>
             ) : (
               <View>

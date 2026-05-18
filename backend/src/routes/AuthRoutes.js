@@ -363,8 +363,11 @@ router.post('/friend-request/accept', async (req, res) => {
     ]);
     if (!user || !fromUser) return res.status(404).json({ msg: 'User not found' });
 
+    // Clear any pending requests in either direction (handles crossed requests / duplicates).
     user.friendRequestsIncoming = (user.friendRequestsIncoming || []).filter((r) => String(r.fromUserId) !== String(fromUser._id));
+    user.friendRequestsOutgoing = (user.friendRequestsOutgoing || []).filter((r) => String(r.toUserId) !== String(fromUser._id));
     fromUser.friendRequestsOutgoing = (fromUser.friendRequestsOutgoing || []).filter((r) => String(r.toUserId) !== String(user._id));
+    fromUser.friendRequestsIncoming = (fromUser.friendRequestsIncoming || []).filter((r) => String(r.fromUserId) !== String(user._id));
 
     user.friends = Array.from(new Set([...(user.friends || []).map(String), String(fromUser._id)])).map((id) => id);
     fromUser.friends = Array.from(new Set([...(fromUser.friends || []).map(String), String(user._id)])).map((id) => id);

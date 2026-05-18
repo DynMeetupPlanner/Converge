@@ -11,7 +11,7 @@ import {
   Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import * as Location from 'expo-location';
 import MapView, { Marker, Circle } from 'react-native-maps';
 import { useAuth } from '@/context/AuthContext';
@@ -180,6 +180,12 @@ export default function PlanDetailScreen() {
   useEffect(() => {
     fetchPlanDetails();
   }, [fetchPlanDetails]);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchPlanDetails();
+    }, [fetchPlanDetails])
+  );
 
   useEffect(() => {
     const fetchSavedPlaces = async () => {
