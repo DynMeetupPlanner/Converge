@@ -10,7 +10,7 @@
 //  - Two-stage cost control: cheap filter → DM API on top-15 only
 //  - Haversine kept as FALLBACK when DM API unavailable/fails per-place
 
-import { buildDistanceMatrix } from './googleDistanceMatrix.js';
+import { computeTravelMatrix } from './googleDistanceMatrix.js';
 
 const EARTH_RADIUS_KM = 6371;
 
@@ -291,25 +291,32 @@ export async function rankMeetingPlaces({ plan, places, filters = {}, travelMode
     });
 
   const dmCandidates = preRanked.slice(0, DM_CANDIDATE_LIMIT);
+  const dmCandidateIds = new Set(dmCandidates.map((c) => c.placeId));
   const restCandidates = preRanked.slice(DM_CANDIDATE_LIMIT);
 
   // ── Phase 1 & 3: Real routing via Google Distance Matrix ────────────────
   let distanceMatrix = null;
   try {
-    distanceMatrix = await buildDistanceMatrix({
+    distanceMatrix = await computeTravelMatrix({
       users: members.map((m) => ({
         userId: m.userId,
         name: m.name,
-        latitude: m.location.latitude,
-        longitude: m.location.longitude,
-        travelMode: m.travelMode || travelMode || 'driving',
-      })),
+        location: {
+          latitude: m.location.latitude,
+          longitude: m.location.longitude,
+        },
+  travelMode: m.travelMode || travelMode || 'driving',
+})),
       candidates: dmCandidates.map((p) => ({
-        placeId: p.placeId,
-        latitude: p.location.latitude,
-        longitude: p.location.longitude,
+        _id: p.placeId,
+        location: {
+          coordinates: [
+            p.location.longitude,
+            p.location.latitude,
+          ],
+        },
       })),
-      defaultMode: travelMode || 'driving',
+      mode: travelMode || 'driving',
       debug,
     });
   } catch (err) {
@@ -327,7 +334,7 @@ export async function rankMeetingPlaces({ plan, places, filters = {}, travelMode
       if (useMatrix) {
         const placeMap = distanceMatrix.get(place.placeId);
         const dmResult = placeMap?.get(member.userId);
-        if (dmResult?.status === 'OK' && dmResult.durationMinutes !== null) {
+        if (dmResult && Number.isFinite(dmResult.durationMinutes)){
           return {
             userId: member.userId,
             name: member.name,
@@ -347,7 +354,7 @@ export async function rankMeetingPlaces({ plan, places, filters = {}, travelMode
   // ── Score all candidates ──────────────────────────────────────────────────
 
   const allScoredIntermediate = [...dmCandidates, ...restCandidates].map((place) => {
-    const useMatrix = !!distanceMatrix && dmCandidates.some((c) => c.placeId === place.placeId);
+    const useMatrix = !!distanceMatrix && dmCandidateIds.has(place.placeId);
     const travelTimes = getTravelTimesForPlace(place, useMatrix);
     const durations = travelTimes.map((t) => t.durationMinutes);
     const metrics = computeFairnessMetrics(durations);
@@ -389,7 +396,7 @@ export async function rankMeetingPlaces({ plan, places, filters = {}, travelMode
 
     const totalScore = baseScore + (voteCount * 3);
 
-    const isRealRouting = !!distanceMatrix && dmCandidates.some((c) => c.placeId === place.placeId);
+    const isRealRouting = !!distanceMatrix && dmCandidateIds.has(place.placeId);
 
     return {
       ...place,
@@ -418,15 +425,16 @@ export async function rankMeetingPlaces({ plan, places, filters = {}, travelMode
 
   // Add reason string now that we know pareto membership
   const scoredWithReason = scored.map((p) => ({
-    ...p,
-    reason: buildReason({
-      fairnessScore: p.fairnessScore,
-      travelStats: p.travelStats,
-      place: p,
-      isRealRouting: p._isRealRouting,
-      isPareto: paretoIds.has(p.placeId),
-    }),
-  }));
+  ...p,
+  isPareto: paretoIds.has(p.placeId),
+  reason: buildReason({
+    fairnessScore: p.fairnessScore,
+    travelStats: p.travelStats,
+    place: p,
+    isRealRouting: p._isRealRouting,
+    isPareto: paretoIds.has(p.placeId),
+  }),
+}));
 
   // ── Final sort and slice ──────────────────────────────────────────────────
   const recommendations = scoredWithReason

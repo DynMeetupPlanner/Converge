@@ -297,12 +297,21 @@ export default function HomeScreen() {
       });
 
       const res = await fetch(`${API_BASE}/places/ranked`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body,
-      });
-      const data = await res.json();
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body,
+});
 
+      const rawText = await res.text();
+
+      let data: any = null;
+
+      try {
+        data = JSON.parse(rawText);
+      } catch (err) {
+        console.error('Non-JSON backend response:', rawText);
+        throw new Error(`Backend returned non-JSON response (${res.status})`);
+      }
       if (requestId !== fetchRequestId.current) return;
 
       if (res.ok && Array.isArray(data.ranked)) {
@@ -405,16 +414,10 @@ export default function HomeScreen() {
   }, [rankedFromBackend, visiblePlaces, personMarkers, category]);
 
   // Update effective midpoint from top-ranked place when using client ranking
-  useEffect(() => {
-    if (!rankedFromBackend && rankedPlaces.length > 0 && geometricMidpoint) {
-      const top = rankedPlaces[0];
-      const coords = getPlaceCoords(top);
-      if (coords) setEffectiveMidpoint({ ...coords, placeName: top.name });
-    }
-  }, [rankedPlaces, rankedFromBackend, geometricMidpoint]);
 
-  useEffect(() => { setExpandedPlaceId(null); }, [category, geometricMidpoint]);
-
+useEffect(() => {
+  setExpandedPlaceId(null);
+}, [category, geometricMidpoint]);
   // ── Save / open place (unchanged logic) ──────────────────────────────────
   const handleSavePlace = async (place: PlaceResult) => {
     if (!user?.id) return;
