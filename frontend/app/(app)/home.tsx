@@ -42,7 +42,7 @@ type PlaceResult = {
   ratingSource?: string | null;
   userRatingsTotal?: number | null;
   category: string;
-  location: { coordinates: [number, number] };
+  location: { coordinates?: [number, number]; latitude?: number; longitude?: number };
   vicinity?: string;
   googlePlaceId?: string;
   socialScore?: number;
@@ -53,7 +53,7 @@ type SavedPlace = { placeId: string; status: 'saved' | 'visited' };
 type PlacesDebug = Record<string, unknown> | null;
 
 type TravelEstimate = {
-  userId?: number;
+  userId?: number | string;
   personId?: number;
   name: string;
   distanceKm: number;
@@ -75,6 +75,14 @@ type RankedPlace = PlaceResult & {
   };
   travelTimes: TravelEstimate[];
   reason: string;
+};
+
+type MapRouteLine = {
+  userId?: number | string;
+  name?: string;
+  index?: number;
+  source?: string;
+  coordinates: Coords[];
 };
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -140,9 +148,8 @@ function isFiniteNumber(value: unknown): value is number {
 
 function getPlaceCoords(place: PlaceResult): Coords | null {
   const coordinates = place.location?.coordinates;
-  if (!Array.isArray(coordinates) || coordinates.length < 2) return null;
-  const longitude = coordinates[0];
-  const latitude = coordinates[1];
+  const latitude = Array.isArray(coordinates) ? coordinates[1] : place.location?.latitude;
+  const longitude = Array.isArray(coordinates) ? coordinates[0] : place.location?.longitude;
   if (!isFiniteNumber(latitude) || !isFiniteNumber(longitude)) return null;
   return { latitude, longitude };
 }
@@ -161,7 +168,7 @@ function clientRankPlaces(
   }
 
   return places
-    .map((place) => {
+    .map((place): RankedPlace | null => {
       const placeCoords = getPlaceCoords(place);
       if (!placeCoords) return null;
       const travelTimes = markers.map((m) => {
@@ -236,6 +243,7 @@ export default function HomeScreen() {
   const [hasChosenCategory, setHasChosenCategory] = useState(false);
   const [expandedPlaceId, setExpandedPlaceId] = useState<string | null>(null);
   const [placesDebug, setPlacesDebug] = useState<PlacesDebug>(null);
+  const [backendRouteLines, setBackendRouteLines] = useState<MapRouteLine[]>([]);
 
   const lastFetchCoords = useRef<Coords | null>(null);
   const fetchRequestId = useRef(0);
@@ -326,6 +334,7 @@ export default function HomeScreen() {
         if (data.effectiveMidpoint) {
           setEffectiveMidpoint(data.effectiveMidpoint);
         }
+        setBackendRouteLines(Array.isArray(data.routeLines) ? data.routeLines : []);
 
         setPlacesDebug({
           source: 'backend-ranked',
@@ -359,10 +368,12 @@ export default function HomeScreen() {
       if (requestId === fetchRequestId.current) {
         setAllPlaces(data.places ?? []);
         setRankedFromBackend(null);  // will fall back to client ranking
+        setBackendRouteLines([]);
         setPlacesDebug({ source: 'fallback-nearby', placeCount: data.places?.length || 0, backendDebug: data.debug });
       }
     } catch (e) {
       setRankedFromBackend(null);
+      setBackendRouteLines([]);
       setPlacesDebug({ source: 'network-error', error: String(e) });
     }
   };
@@ -372,6 +383,7 @@ export default function HomeScreen() {
     setLoading(true);
     setLocationError('');
     setRankedFromBackend(null);
+    setBackendRouteLines([]);
     const newMarkers: { id: number; name: string; coords: Coords }[] = [];
     try {
       const coordsList: Coords[] = [];
@@ -427,6 +439,40 @@ export default function HomeScreen() {
 useEffect(() => {
   setExpandedPlaceId(null);
 }, [category, geometricMidpoint]);
+
+  const selectedRouteDestination = useMemo(() => {
+    const expandedPlace = rankedPlaces.find((place) => place._id === expandedPlaceId);
+    const expandedCoords = expandedPlace ? getPlaceCoords(expandedPlace) : null;
+    if (expandedCoords) return { ...expandedCoords, name: expandedPlace?.name };
+    if (effectiveMidpoint) return effectiveMidpoint;
+    const topPlace = rankedPlaces[0];
+    const topCoords = topPlace ? getPlaceCoords(topPlace) : null;
+    return topCoords ? { ...topCoords, name: topPlace.name } : null;
+  }, [effectiveMidpoint, expandedPlaceId, rankedPlaces]);
+
+  const routeLines = useMemo(() => {
+    const hasSelectedPlace = Boolean(expandedPlaceId);
+    const backendLines = backendRouteLines
+      .filter((line) => Array.isArray(line.coordinates) && line.coordinates.length >= 2)
+      .map((line, index) => ({
+        key: `backend-${line.userId ?? index}`,
+        color: AVATAR_COLORS[index % AVATAR_COLORS.length].border,
+        coordinates: line.coordinates,
+        source: line.source,
+      }));
+    if (!hasSelectedPlace && backendLines.length) return backendLines;
+    if (!selectedRouteDestination) return [];
+    return personMarkers.map((marker, index) => ({
+      key: `${marker.id}-${selectedRouteDestination.latitude}-${selectedRouteDestination.longitude}`,
+      color: AVATAR_COLORS[index % AVATAR_COLORS.length].border,
+      coordinates: [
+        marker.coords,
+        { latitude: selectedRouteDestination.latitude, longitude: selectedRouteDestination.longitude },
+      ],
+      source: 'direct-line-fallback',
+    }));
+  }, [backendRouteLines, expandedPlaceId, personMarkers, selectedRouteDestination]);
+
   // ── Save / open place (unchanged logic) ──────────────────────────────────
   const handleSavePlace = async (place: PlaceResult) => {
     if (!user?.id) return;
@@ -510,6 +556,17 @@ useEffect(() => {
             {personMarkers.map((m, i) => (
               <Marker key={m.id} coordinate={m.coords} title={`Person ${i + 1}`} description={m.name}
                 pinColor={i === 0 ? C.accent : i === 1 ? C.green : C.red} />
+            ))}
+
+            {routeLines.map((line) => (
+              <Polyline
+                key={line.key}
+                coordinates={line.coordinates}
+                strokeColor={line.color}
+                strokeWidth={3}
+                lineDashPattern={line.source === 'google-directions' ? undefined : [8, 6]}
+                zIndex={6}
+              />
             ))}
 
             {rankedPlaces.map((place) => {

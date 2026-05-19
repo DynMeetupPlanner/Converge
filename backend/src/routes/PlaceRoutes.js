@@ -2,8 +2,10 @@ import express from 'express';
 import Place from '../models/Place.js';
 import User from '../models/User.js';
 import { fetchNearbyPlacesGoogle } from '../services/places/googlePlaces.js';
+import { calculateCentroid, rankMeetingPlaces } from '../services/places/meetingPlanner.js';
 
 const router = express.Router();
+const GOOGLE_DIRECTIONS_URL = 'https://maps.googleapis.com/maps/api/directions/json';
 
 function buildMongoQuery({ lat, lng, radius, category }) {
   const query = {
@@ -69,6 +71,154 @@ async function upsertPlaces(places) {
   );
 }
 
+function normalizeCachedPlace(place) {
+  const plain = typeof place.toObject === 'function' ? place.toObject() : place;
+  return {
+    ...plain,
+    _id: plain.externalId || String(plain._id),
+    location: {
+      coordinates: plain.location?.coordinates || [],
+    },
+  };
+}
+
+function buildTemporaryPlan(userCoords, travelMode) {
+  return {
+    members: userCoords.map((coords, index) => ({
+      userId: `person-${index + 1}`,
+      name: index === 0 ? 'You' : `Person ${index + 1}`,
+      travelMode,
+      location: {
+        latitude: Number(coords.latitude),
+        longitude: Number(coords.longitude),
+      },
+    })),
+    votes: [],
+  };
+}
+
+function serializeRankedPlace(place) {
+  const latitude = place.location?.latitude;
+  const longitude = place.location?.longitude;
+
+  return {
+    ...place,
+    _id: place.placeId,
+    location: {
+      coordinates: [longitude, latitude],
+      latitude,
+      longitude,
+    },
+  };
+}
+
+function serializeEffectiveMidpoint(midpoint) {
+  if (!midpoint) return null;
+  return {
+    ...midpoint,
+    name: midpoint.placeName,
+    latitude: midpoint.latitude,
+    longitude: midpoint.longitude,
+  };
+}
+
+function decodePolyline(encoded) {
+  const points = [];
+  let index = 0;
+  let lat = 0;
+  let lng = 0;
+
+  while (index < encoded.length) {
+    let shift = 0;
+    let result = 0;
+    let byte;
+
+    do {
+      byte = encoded.charCodeAt(index++) - 63;
+      result |= (byte & 0x1f) << shift;
+      shift += 5;
+    } while (byte >= 0x20);
+
+    lat += (result & 1) ? ~(result >> 1) : (result >> 1);
+    shift = 0;
+    result = 0;
+
+    do {
+      byte = encoded.charCodeAt(index++) - 63;
+      result |= (byte & 0x1f) << shift;
+      shift += 5;
+    } while (byte >= 0x20);
+
+    lng += (result & 1) ? ~(result >> 1) : (result >> 1);
+    points.push({ latitude: lat / 1e5, longitude: lng / 1e5 });
+  }
+
+  return points;
+}
+
+async function fetchRouteLine({ origin, destination, mode, apiKey }) {
+  const params = new URLSearchParams({
+    key: apiKey,
+    origin: `${origin.latitude},${origin.longitude}`,
+    destination: `${destination.latitude},${destination.longitude}`,
+    mode,
+  });
+
+  const response = await fetch(`${GOOGLE_DIRECTIONS_URL}?${params.toString()}`, {
+    headers: { Accept: 'application/json' },
+  });
+  if (!response.ok) return null;
+
+  const data = await response.json();
+  const encoded = data.routes?.[0]?.overview_polyline?.points;
+  if (data.status !== 'OK' || !encoded) return null;
+
+  return {
+    source: 'google-directions',
+    distanceMeters: data.routes?.[0]?.legs?.[0]?.distance?.value ?? null,
+    durationSeconds: data.routes?.[0]?.legs?.[0]?.duration?.value ?? null,
+    coordinates: decodePolyline(encoded),
+  };
+}
+
+async function buildRouteLines({ members, destination, mode, debug }) {
+  if (!destination) return [];
+
+  const apiKey = process.env.GOOGLE_PLACES_API_KEY;
+  debug.directionsEnabled = Boolean(apiKey);
+
+  const fallbackLines = members.map((member, index) => ({
+    userId: member.userId,
+    name: member.name,
+    index,
+    source: 'direct-line-fallback',
+    coordinates: [member.location, destination],
+  }));
+
+  if (!apiKey) return fallbackLines;
+
+  const routeLines = await Promise.all(members.map(async (member, index) => {
+    try {
+      const route = await fetchRouteLine({
+        origin: member.location,
+        destination,
+        mode: member.travelMode || mode,
+        apiKey,
+      });
+      return route
+        ? { userId: member.userId, name: member.name, index, ...route }
+        : fallbackLines[index];
+    } catch (err) {
+      debug.directionsErrors = debug.directionsErrors || [];
+      debug.directionsErrors.push(err.message);
+      return fallbackLines[index];
+    }
+  }));
+
+  debug.directionsRouteCount = routeLines.filter((line) => line.source === 'google-directions').length;
+  return routeLines;
+}
+
 // GET /places/nearby?lat=17.38&lng=78.48&radius=5&category=cafe
 router.get('/nearby', async (req, res) => {
   try {
@@ -115,6 +265,138 @@ router.get('/nearby', async (req, res) => {
       msg: 'Server error',
       debug: {
         route: 'GET /places/nearby',
+        error: err.message,
+        serverTime: new Date().toISOString(),
+      },
+    });
+  }
+});
+
+// POST /places/ranked
+// Body: { userCoords: [{ latitude, longitude }], radius, category, travelMode }
+router.post('/ranked', async (req, res) => {
+  try {
+    const {
+      userCoords = [],
+      midpoint,
+      radius = 5,
+      category = 'all',
+      travelMode = 'driving',
+      filters = {},
+    } = req.body || {};
+
+    const validCoords = Array.isArray(userCoords)
+      ? userCoords.filter((coords) =>
+        Number.isFinite(Number(coords?.latitude)) && Number.isFinite(Number(coords?.longitude))
+      )
+      : [];
+
+    const debug = {
+      route: 'POST /places/ranked',
+      body: {
+        userCoordCount: validCoords.length,
+        midpointProvided: Boolean(midpoint),
+        radius,
+        category,
+        travelMode,
+      },
+      provider: 'google',
+      googleApiKeyPresent: Boolean(process.env.GOOGLE_PLACES_API_KEY),
+      serverTime: new Date().toISOString(),
+    };
+
+    if (validCoords.length < 2) {
+      return res.status(400).json({
+        msg: 'At least two valid user coordinates are required',
+        debug,
+      });
+    }
+
+    const plan = buildTemporaryPlan(validCoords, travelMode);
+    const center = midpoint
+      && Number.isFinite(Number(midpoint.latitude))
+      && Number.isFinite(Number(midpoint.longitude))
+      ? {
+        latitude: Number(midpoint.latitude),
+        longitude: Number(midpoint.longitude),
+      }
+      : calculateCentroid(plan.members);
+
+    let places = await fetchNearbyPlacesGoogle({
+      lat: center.latitude,
+      lng: center.longitude,
+      radiusKm: radius,
+      category,
+      debug,
+    });
+    let source = 'google';
+
+    if (places.length) {
+      await upsertPlaces(places);
+    } else {
+      const cachedPlaces = await Place.find(buildMongoQuery({
+        lat: center.latitude,
+        lng: center.longitude,
+        radius,
+        category,
+      }))
+        .sort({ lastSeenAt: -1 })
+        .limit(50);
+      places = cachedPlaces.map(normalizeCachedPlace);
+      source = places.length ? 'mongo-fallback-after-google-empty' : 'empty-after-google-empty';
+      debug.mongoFallback = {
+        returnedCount: places.length,
+        ratedCount: places.filter((place) => Number.isFinite(place.rating)).length,
+        googleRatedCount: places.filter((place) => place.ratingSource === 'google' && Number.isFinite(place.rating)).length,
+      };
+    }
+
+    const rankedResult = await rankMeetingPlaces({
+      plan,
+      places,
+      travelMode,
+      filters: {
+        minRating: filters.minRating ? Number(filters.minRating) : undefined,
+        priceLevel: filters.priceLevel || 'any',
+        openNow: filters.openNow === true,
+      },
+      debug,
+    });
+
+    const ranked = rankedResult.recommendations.map(serializeRankedPlace);
+    const routeLines = await buildRouteLines({
+      members: plan.members,
+      destination: rankedResult.effectiveMidpoint,
+      mode: travelMode,
+      debug,
+    });
+
+    return res.json({
+      center,
+      source,
+      places,
+      ranked,
+      paretoFront: rankedResult.paretoFront.map(serializeRankedPlace),
+      effectiveMidpoint: serializeEffectiveMidpoint(rankedResult.effectiveMidpoint),
+      geometricCentroid: rankedResult.geometricCentroid,
+      usingRealRouting: rankedResult.usingRealRouting,
+      routeLines,
+      debug: {
+        ...debug,
+        final: {
+          rankedCount: ranked.length,
+          placeCount: places.length,
+          ratedCount: places.filter((place) => Number.isFinite(place.rating)).length,
+          googleRatedCount: places.filter((place) => place.ratingSource === 'google' && Number.isFinite(place.rating)).length,
+        },
+      },
+    });
+  } catch (err) {
+    console.error('Ranked places error:', err);
+    res.status(500).json({
+      msg: 'Server error',
+      debug: {
+        route: 'POST /places/ranked',
         error: err.message,
         serverTime: new Date().toISOString(),
       },

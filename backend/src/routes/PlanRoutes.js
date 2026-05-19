@@ -253,7 +253,7 @@ router.get('/:id/recommendations', async (req, res) => {
       };
     }
 
-    const recommendations = rankMeetingPlaces({
+    const rankedResult = await rankMeetingPlaces({
       plan,
       places,
       travelMode,
@@ -263,10 +263,13 @@ router.get('/:id/recommendations', async (req, res) => {
         openNow: openNow === 'true',
       },
     });
+    const recommendations = rankedResult.recommendations;
 
     res.json({
       center,
       source,
+      effectiveMidpoint: rankedResult.effectiveMidpoint,
+      paretoFront: rankedResult.paretoFront,
       ratingNote: debug.outputGoogleRatedPlaceCount > 0
         ? `Google ratings loaded for ${debug.outputGoogleRatedPlaceCount} place(s).`
         : 'Google Places returned no rated places for this search. Open debug to see the exact Google response.',
