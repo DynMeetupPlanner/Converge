@@ -13,7 +13,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import * as Location from 'expo-location';
-import MapView, { Marker, Circle } from 'react-native-maps';
+import MapView, { Marker, Circle, Polyline } from 'react-native-maps';
 import { useAuth } from '@/context/AuthContext';
 import { usePlans } from '@/context/PlanContext';
 import { s, C } from '../../../tempStyles/PlanStyle';
@@ -32,6 +32,21 @@ type AvailabilitySlot = { day: string; startTime: string; endTime: string };
 type SavedPlace = { placeId: string; status: 'saved' | 'visited' };
 type PlanVote = { placeId?: string; userId: string; place?: { placeId?: string } };
 type PlacesDebug = Record<string, unknown> | null;
+type Coords = { latitude: number; longitude: number };
+type MapRouteLine = {
+  userId?: string;
+  name?: string;
+  index?: number;
+  source?: string;
+  coordinates: Coords[];
+};
+type EffectiveMidpoint = Coords & {
+  placeId?: string;
+  placeName?: string;
+  name?: string;
+  maxTravelMinutes?: number;
+  avgTravelMinutes?: number;
+};
 type Recommendation = {
   placeId: string;
   googlePlaceId?: string;
@@ -116,6 +131,8 @@ export default function PlanDetailScreen() {
   const [hasChosenCategoryFilter, setHasChosenCategoryFilter] = useState(false);
   const [expandedPlaceId, setExpandedPlaceId] = useState<string | null>(null);
   const [placesDebug, setPlacesDebug] = useState<PlacesDebug>(null);
+  const [effectiveMidpoint, setEffectiveMidpoint] = useState<EffectiveMidpoint | null>(null);
+  const [backendRouteLines, setBackendRouteLines] = useState<MapRouteLine[]>([]);
   const voteSyncInFlightRef = React.useRef(false);
   const visibleRecommendations = useMemo(
     () => (categoryFilter === 'all'
@@ -145,6 +162,8 @@ export default function PlanDetailScreen() {
     setRecommendationLoading(false);
     setRecommendationNote('');
     setPlacesDebug(null);
+    setEffectiveMidpoint(null);
+    setBackendRouteLines([]);
     setExpandedPlaceId(null);
   }, [planIdString, setCurrentPlan]);
 
@@ -287,12 +306,16 @@ export default function PlanDetailScreen() {
       });
       if (!res.ok) {
         setRecommendationNote(data.msg || 'Could not load recommendations');
+        setEffectiveMidpoint(null);
+        setBackendRouteLines([]);
         return;
       }
       const fairnessRanked = [...(data.recommendations || [])]
         .sort((a, b) => b.fairnessScore - a.fairnessScore)
         .slice(0, 7);
       setRecommendations(fairnessRanked);
+      setEffectiveMidpoint(data.effectiveMidpoint || null);
+      setBackendRouteLines(Array.isArray(data.routeLines) ? data.routeLines : []);
       setExpandedPlaceId(null);
       setEmergencyAlternatives(data.emergencyAlternatives || []);
       setAvailabilityMatches(data.availabilityMatches || []);
@@ -301,6 +324,8 @@ export default function PlanDetailScreen() {
       console.error('Recommendation error:', err);
       if (activePlanIdRef.current === planIdString) {
         setRecommendationNote('Could not load smart recommendations');
+        setEffectiveMidpoint(null);
+        setBackendRouteLines([]);
         setPlacesDebug({
           status: 'network-error',
           error: err instanceof Error ? err.message : String(err),
@@ -440,6 +465,48 @@ function getPlaceCoords(place: Recommendation) {
   return null;
 }
 
+  const selectedRouteDestination = useMemo(() => {
+    const expandedPlace = visibleRecommendations.find((place) => place.placeId === expandedPlaceId);
+    const expandedCoords = expandedPlace ? getPlaceCoords(expandedPlace) : null;
+    if (expandedCoords) return { ...expandedCoords, name: expandedPlace?.name };
+    if (effectiveMidpoint) return effectiveMidpoint;
+    const topPlace = visibleRecommendations[0];
+    const topCoords = topPlace ? getPlaceCoords(topPlace) : null;
+    return topCoords ? { ...topCoords, name: topPlace.name } : null;
+  }, [effectiveMidpoint, expandedPlaceId, visibleRecommendations]);
+
+  const routeLines = useMemo(() => {
+    const hasSelectedPlace = Boolean(expandedPlaceId);
+    const backendLines = backendRouteLines
+      .filter((line) => Array.isArray(line.coordinates) && line.coordinates.length >= 2)
+      .map((line, index) => ({
+        key: `backend-${line.userId ?? index}`,
+        color: index === 0 ? C.accent : index === 1 ? C.green : C.red,
+        coordinates: line.coordinates,
+        source: line.source,
+      }));
+    if (!hasSelectedPlace && backendLines.length) return backendLines;
+    if (!selectedRouteDestination) return [];
+
+    return (currentPlan?.members || [])
+      .filter((member) => member.location)
+      .map((member, index) => ({
+        key: `direct-${member.userId}`,
+        color: index === 0 ? C.accent : index === 1 ? C.green : C.red,
+        coordinates: [
+          {
+            latitude: member.location!.latitude,
+            longitude: member.location!.longitude,
+          },
+          {
+            latitude: selectedRouteDestination.latitude,
+            longitude: selectedRouteDestination.longitude,
+          },
+        ],
+        source: 'direct-line-fallback',
+      }));
+  }, [backendRouteLines, currentPlan?.members, expandedPlaceId, selectedRouteDestination]);
+
 const openPlaceLink = (
   place: Recommendation,
   type: 'maps' | 'zomato' | 'swiggy'
@@ -513,9 +580,21 @@ const openPlaceLink = (
                   latitude: currentPlan.midpoint.latitude,
                   longitude: currentPlan.midpoint.longitude,
                 }}
-                title="Midpoint"
-                pinColor={C.accent}
+                title="Geometric midpoint"
+                pinColor={C.textMuted}
               />
+              {effectiveMidpoint ? (
+                <Marker
+                  coordinate={{
+                    latitude: effectiveMidpoint.latitude,
+                    longitude: effectiveMidpoint.longitude,
+                  }}
+                  title={effectiveMidpoint.name || effectiveMidpoint.placeName || 'Route-optimised midpoint'}
+                  description="Best meetup point by route travel time"
+                  pinColor={C.accent}
+                  zIndex={10}
+                />
+              ) : null}
               {currentPlan.members?.filter(m => m.location).map((m, i) => (
                 <Marker
                   key={m.userId}
@@ -525,6 +604,16 @@ const openPlaceLink = (
                   }}
                   title={m.name}
                   pinColor={C.green}
+                />
+              ))}
+              {routeLines.map((line) => (
+                <Polyline
+                  key={line.key}
+                  coordinates={line.coordinates}
+                  strokeColor={line.color}
+                  strokeWidth={3}
+                  lineDashPattern={line.source === 'google-directions' ? undefined : [8, 6]}
+                  zIndex={6}
                 />
               ))}
               {visibleRecommendations

@@ -2,6 +2,7 @@ import express from 'express';
 import Plan from '../models/Plan.js';
 import User from '../models/User.js';
 import Place from '../models/Place.js';
+import { buildRouteLines } from '../services/places/googleDirections.js';
 import { fetchNearbyPlacesGoogle } from '../services/places/googlePlaces.js';
 import {
   calculateCentroid,
@@ -181,7 +182,7 @@ router.post('/:id/location', async (req, res) => {
 
     // Recalculate midpoint if at least 2 people shared
     const sharedMembers = plan.members.filter(m => m.location && m.location.latitude);
-    if (sharedMembers.length >= 1) {
+    if (sharedMembers.length >= 2) {
       const avgLat = sharedMembers.reduce((acc, m) => acc + m.location.latitude, 0) / sharedMembers.length;
       const avgLng = sharedMembers.reduce((acc, m) => acc + m.location.longitude, 0) / sharedMembers.length;
       plan.midpoint = { latitude: avgLat, longitude: avgLng };
@@ -262,14 +263,22 @@ router.get('/:id/recommendations', async (req, res) => {
         priceLevel,
         openNow: openNow === 'true',
       },
+      debug,
     });
     const recommendations = rankedResult.recommendations;
+    const routeLines = await buildRouteLines({
+      members: locatedMembers,
+      destination: rankedResult.effectiveMidpoint,
+      mode: travelMode || 'driving',
+      debug,
+    });
 
     res.json({
       center,
       source,
       effectiveMidpoint: rankedResult.effectiveMidpoint,
       paretoFront: rankedResult.paretoFront,
+      routeLines,
       ratingNote: debug.outputGoogleRatedPlaceCount > 0
         ? `Google ratings loaded for ${debug.outputGoogleRatedPlaceCount} place(s).`
         : 'Google Places returned no rated places for this search. Open debug to see the exact Google response.',
