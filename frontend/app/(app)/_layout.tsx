@@ -1,10 +1,23 @@
 import { Tabs, Redirect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/context/AuthContext';
-import { View, ActivityIndicator } from 'react-native';
+import { View, ActivityIndicator, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+const TAB_BAR_BASE_HEIGHT = 70;
+const TAB_BAR_TOP_PADDING = 10;
+const TAB_BAR_BOTTOM_PADDING = 10;
+const ANDROID_BUTTON_NAV_MIN_INSET = 32;
 
 export default function AppLayout() {
   const { user, isLoading } = useAuth();
+  const insets = useSafeAreaInsets();
+  const bottomInset =
+    Platform.OS === 'android'
+      ? insets.bottom >= ANDROID_BUTTON_NAV_MIN_INSET
+        ? insets.bottom
+        : 0
+      : insets.bottom;
 
   if (isLoading) {
     return (
@@ -19,7 +32,16 @@ export default function AppLayout() {
   }
 
   return (
-    <Tabs screenOptions={{ headerShown: false, tabBarStyle: { height: 70, paddingBottom: 10 ,paddingTop: 10 } }}>
+    <Tabs
+      screenOptions={{
+        headerShown: false,
+        tabBarStyle: {
+          height: TAB_BAR_BASE_HEIGHT + bottomInset,
+          paddingTop: TAB_BAR_TOP_PADDING,
+          paddingBottom: TAB_BAR_BOTTOM_PADDING + bottomInset,
+        },
+      }}
+    >
       <Tabs.Screen
         name="home"
         options={{

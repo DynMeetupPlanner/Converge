@@ -100,6 +100,18 @@ function normalizePlaceKey(value: unknown): string {
   return String(value || '').trim();
 }
 
+function sortRecommendationsByVotes(places: Recommendation[]): Recommendation[] {
+  return [...places].sort((a, b) => {
+    const voteDiff = (b.voteCount || 0) - (a.voteCount || 0);
+    if (voteDiff !== 0) return voteDiff;
+
+    const scoreDiff = (b.totalScore || 0) - (a.totalScore || 0);
+    if (scoreDiff !== 0) return scoreDiff;
+
+    return (b.fairnessScore || 0) - (a.fairnessScore || 0);
+  });
+}
+
 export default function PlanDetailScreen() {
   const { id: planId } = useLocalSearchParams();
   const { user } = useAuth();
@@ -310,10 +322,9 @@ export default function PlanDetailScreen() {
         setBackendRouteLines([]);
         return;
       }
-      const fairnessRanked = [...(data.recommendations || [])]
-        .sort((a, b) => b.fairnessScore - a.fairnessScore)
-        .slice(0, 7);
-      setRecommendations(fairnessRanked);
+      const voteRanked = sortRecommendationsByVotes(data.recommendations || [])
+        .slice(0, 20);
+      setRecommendations(voteRanked);
       setEffectiveMidpoint(data.effectiveMidpoint || null);
       setBackendRouteLines(Array.isArray(data.routeLines) ? data.routeLines : []);
       setExpandedPlaceId(null);
@@ -355,7 +366,7 @@ export default function PlanDetailScreen() {
       votesByPlace.set(placeKey, existing);
     }
 
-    setRecommendations((current) => current.map((place) => {
+    setRecommendations((current) => sortRecommendationsByVotes(current.map((place) => {
       const placeKey = normalizePlaceKey(place.placeId);
       const votedBy = votesByPlace.get(placeKey) || [];
       return {
@@ -363,7 +374,7 @@ export default function PlanDetailScreen() {
         voteCount: votedBy.length,
         votedBy,
       };
-    }));
+    })));
   }, []);
 
   useEffect(() => {
