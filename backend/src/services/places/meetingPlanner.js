@@ -22,7 +22,7 @@ const FALLBACK_ROAD_FACTOR = { walking: 1.15, driving: 1.35, transit: 1.45 };
 const DM_CANDIDATE_LIMIT = 15;
 
 // Final output cap
-const TOP_PLACE_LIMIT = 7;
+const TOP_PLACE_LIMIT = 20;
 
 // ─── Math helpers ─────────────────────────────────────────────────────────────
 

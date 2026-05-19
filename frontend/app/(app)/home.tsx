@@ -84,6 +84,11 @@ type MapRouteLine = {
   source?: string;
   coordinates: Coords[];
 };
+type LastFetchParams = {
+  coords: Coords;
+  category: Category;
+  travelMode: TravelMode;
+};
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const CATEGORY_OPTIONS: { key: Category; label: string; icon: string }[] = [
@@ -245,7 +250,7 @@ export default function HomeScreen() {
   const [placesDebug, setPlacesDebug] = useState<PlacesDebug>(null);
   const [backendRouteLines, setBackendRouteLines] = useState<MapRouteLine[]>([]);
 
-  const lastFetchCoords = useRef<Coords | null>(null);
+  const lastFetchParams = useRef<LastFetchParams | null>(null);
   const fetchRequestId = useRef(0);
   const mapRef = useRef<MapView>(null);
 
@@ -292,7 +297,11 @@ export default function HomeScreen() {
   ) => {
     const requestId = fetchRequestId.current + 1;
     fetchRequestId.current = requestId;
-    lastFetchCoords.current = midCoords;
+    lastFetchParams.current = {
+      coords: midCoords,
+      category: currentCategory,
+      travelMode: currentMode,
+    };
 
     try {
       // Pass all user coords + mode to backend for real routing + bounding-box search
@@ -382,8 +391,6 @@ export default function HomeScreen() {
   const handleSearch = async () => {
     setLoading(true);
     setLocationError('');
-    setRankedFromBackend(null);
-    setBackendRouteLines([]);
     const newMarkers: { id: number; name: string; coords: Coords }[] = [];
     try {
       const coordsList: Coords[] = [];
@@ -405,11 +412,17 @@ export default function HomeScreen() {
       setPersonMarkers(newMarkers);
       const mid = calcMidpoint(coordsList);
       setGeometricMidpoint(mid);
-      setEffectiveMidpoint(null);  // reset until backend responds
       mapRef.current?.animateToRegion({ ...mid, latitudeDelta: 0.05, longitudeDelta: 0.05 }, 800);
 
-      const shouldFetch = !lastFetchCoords.current || haversine(lastFetchCoords.current, mid) >= REFETCH_THRESHOLD_KM;
+      const lastFetch = lastFetchParams.current;
+      const shouldFetch = !lastFetch
+        || haversine(lastFetch.coords, mid) >= REFETCH_THRESHOLD_KM
+        || lastFetch.category !== category
+        || lastFetch.travelMode !== travelMode;
       if (shouldFetch) {
+        setRankedFromBackend(null);
+        setEffectiveMidpoint(null);  // reset until backend responds
+        setBackendRouteLines([]);
         await fetchRankedPlaces(coordsList, mid, category, travelMode);
       }
     } finally {
@@ -703,7 +716,7 @@ useEffect(() => {
           {loading ? <ActivityIndicator color={C.white} size="small" /> : (
             <>
               <Ionicons name="navigate" size={18} color={C.white} style={{ marginRight: 10 }} />
-              <Text style={s.ctaText}>Find Midpoint</Text>
+              <Text style={s.ctaText}>Find Midpoint Places</Text>
               <View style={s.ctaArrow}><Ionicons name="arrow-forward" size={14} color={C.accent} /></View>
             </>
           )}
