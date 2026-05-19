@@ -163,6 +163,7 @@ export async function computeTravelMatrix({ users, candidates, mode = 'driving',
   const apiKey = process.env.GOOGLE_PLACES_API_KEY; // same key — Distance Matrix is on same project
   debug.matrixEnabled = Boolean(apiKey);
   debug.matrixMode = mode;
+  debug.usedGoogleMatrix = false;
 
   // Build user origin coords
   const origins = users
@@ -228,6 +229,9 @@ export async function computeTravelMatrix({ users, candidates, mode = 'driving',
       });
     }
 
+    if (matrixRows) {
+    debug.usedGoogleMatrix = true;
+    }
     for (let oi = 0; oi < groupOrigins.length; oi++) {
       const origin = groupOrigins[oi];
       for (let di = 0; di < destinations.length; di++) {

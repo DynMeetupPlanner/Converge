@@ -102,7 +102,7 @@ function estimateTravelFallback(member, placeCoords, requestedMode) {
     mode,
     distanceKm: Number(distanceKm.toFixed(2)),
     durationMinutes: Math.max(1, Math.round((distanceKm / speed) * 60)),
-    source: 'haversine_fallback',
+    source: 'haversine-fallback',
   };
 }
 
@@ -153,17 +153,19 @@ function computeParetoFront(scoredPlaces) {
   return scoredPlaces.filter((a) => {
     const dominated = scoredPlaces.some((b) => {
       if (b.placeId === a.placeId) return false;
+
       return (
         b.travelStats.maxMinutes <= a.travelStats.maxMinutes &&
-        b.travelStats.spreadMinutes <= a.travelStats.spreadMinutes &&
+        b.travelStats.varianceMinutes <= a.travelStats.varianceMinutes &&
         (b.socialScore || 0) >= (a.socialScore || 0) &&
         (
           b.travelStats.maxMinutes < a.travelStats.maxMinutes ||
-          b.travelStats.spreadMinutes < a.travelStats.spreadMinutes ||
+          b.travelStats.varianceMinutes < a.travelStats.varianceMinutes ||
           (b.socialScore || 0) > (a.socialScore || 0)
         )
       );
     });
+
     return !dominated;
   });
 }
@@ -181,7 +183,7 @@ export function computeEffectiveMidpoint(scoredPlaces) {
     latitude: best.location.latitude,
     longitude: best.location.longitude,
     placeId: best.placeId,
-    name: best.name,
+    placeName: best.name,
     maxTravelMinutes: best.travelStats.maxMinutes,
     avgTravelMinutes: best.travelStats.averageMinutes,
   };
@@ -323,7 +325,7 @@ export async function rankMeetingPlaces({ plan, places, filters = {}, travelMode
     debug.matrixError = err.message;
   }
 
-  debug.usingRealRouting = !!distanceMatrix;
+  debug.usingRealRouting = debug.usedGoogleMatrix === true;
 
   // ── Build travel times per place (real or fallback) ──────────────────────
 
@@ -331,7 +333,7 @@ export async function rankMeetingPlaces({ plan, places, filters = {}, travelMode
     return members.map((member) => {
       const mode = member.travelMode || travelMode || 'driving';
 
-      if (useMatrix) {
+      if (useMatrix && distanceMatrix instanceof Map) {
         const placeMap = distanceMatrix.get(place.placeId);
         const dmResult = placeMap?.get(member.userId);
         if (dmResult && Number.isFinite(dmResult.durationMinutes)){
@@ -341,7 +343,7 @@ export async function rankMeetingPlaces({ plan, places, filters = {}, travelMode
             mode: dmResult.mode,
             distanceKm: dmResult.distanceKm,
             durationMinutes: dmResult.durationMinutes,
-            source: 'google_distance_matrix',
+            source: 'google',
           };
         }
       }
@@ -411,7 +413,7 @@ export async function rankMeetingPlaces({ plan, places, filters = {}, travelMode
         maxMinutes,
         minMinutes,
         spreadMinutes: spread,
-        variance: Number(metrics.variance.toFixed(1)),
+        varianceMinutes: Number(metrics.variance.toFixed(1)),
       },
       fairnessScore,
       totalScore,
@@ -449,7 +451,7 @@ export async function rankMeetingPlaces({ plan, places, filters = {}, travelMode
     paretoFront: paretoFront.slice(0, 3),  // top-3 pareto options
     effectiveMidpoint,
     geometricCentroid: centroid,            // kept for map viz
-    usingRealRouting: !!distanceMatrix,
+    usingRealRouting: debug.usedGoogleMatrix === true,
   };
 }
 

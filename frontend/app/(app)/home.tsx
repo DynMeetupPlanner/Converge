@@ -9,7 +9,7 @@
 //  • Map shows TWO midpoint markers: geometric centroid (grey) + effective
 //    midpoint = top-ranked place (accent colour) (PHASE 5+15)
 //  • Each place card shows per-person ETAs with data source badge (PHASE 18+19)
-//  • travelStats.varianceMinutes exposed in expanded card
+//  • travelStats.variance exposed in expanded card
 //  • isPareto badge on Pareto-optimal results (PHASE 13)
 //  • travelMode selector added (PHASE 10)
 //  • Saved-places storage preserved (no changes to save/fetch logic)
@@ -222,7 +222,7 @@ export default function HomeScreen() {
 
   // Two midpoint concepts (PHASE 5+15)
   const [geometricMidpoint, setGeometricMidpoint] = useState<Coords | null>(null);
-  const [effectiveMidpoint, setEffectiveMidpoint] = useState<(Coords & { placeName?: string }) | null>(null);
+  const [effectiveMidpoint, setEffectiveMidpoint] = useState<(Coords & { name?: string }) | null>(null);
 
   const [region, setRegion] = useState<Region>({
     latitude: 12.9716, longitude: 77.5946, latitudeDelta: 0.1, longitudeDelta: 0.1,
@@ -309,7 +309,11 @@ export default function HomeScreen() {
       try {
         data = JSON.parse(rawText);
       } catch (err) {
-        console.error('Non-JSON backend response:', rawText);
+        console.error('Non-JSON backend response:', {
+          status: res.status,
+          statusText: res.statusText,
+          body: rawText,
+        });
         throw new Error(`Backend returned non-JSON response (${res.status})`);
       }
       if (requestId !== fetchRequestId.current) return;
@@ -337,7 +341,12 @@ export default function HomeScreen() {
         await fetchPlacesFallback(midCoords, requestId);
       }
     } catch (e) {
-      console.error('fetchRankedPlaces error:', e);
+      console.error('fetchRankedPlaces error:', {
+        error: e,
+        api: `${API_BASE}/places/ranked`,
+        mode: currentMode,
+        category: currentCategory,
+      });
       await fetchPlacesFallback(midCoords, requestId);
     }
   };
@@ -491,7 +500,7 @@ useEffect(() => {
             {effectiveMidpoint && (
               <Marker
                 coordinate={effectiveMidpoint}
-                title={effectiveMidpoint.placeName ? `📍 ${effectiveMidpoint.placeName}` : 'Best meetup point'}
+                title={effectiveMidpoint.name ? `📍 ${effectiveMidpoint.name}` : 'Best meetup point'}
                 description="Route-optimised meeting point"
                 pinColor={C.accent}
                 zIndex={10}
@@ -732,8 +741,12 @@ useEffect(() => {
                   <View style={s.travelList}>
                     {place.travelTimes.map((item, ti) => {
                       const isTraffic = item.source === 'google-traffic';
-                      const isGoogle  = item.source === 'google';
-                      const sourceLabel = isTraffic ? '🚦' : isGoogle ? '🗺' : '~';
+                      const isGoogle = item.source === 'google';
+
+                      const sourceLabel =
+                        isTraffic ? '🚦'
+                        : isGoogle ? '🗺'
+                        : '≈';
                       return (
                         <Text key={`${place._id}-${item.personId ?? item.userId ?? ti}`} style={s.travelText}>
                           {sourceLabel} {item.name}: {item.durationMinutes} min · {item.distanceKm} km
